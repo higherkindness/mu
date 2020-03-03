@@ -19,6 +19,13 @@ package protocol
 
 import scala.annotation.StaticAnnotation
 
+class serviceCodeGen( //TODO: rename to "service"
+    val serializationType: SerializationType,
+    val compressionType: CompressionType = Identity,
+    val namespace: Option[String] = None,
+    val methodNameStyle: MethodNameStyle = Unchanged)
+    extends StaticAnnotation
+
 sealed trait StreamingType         extends Product with Serializable
 case object RequestStreaming       extends StreamingType
 case object ResponseStreaming      extends StreamingType

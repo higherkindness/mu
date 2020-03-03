@@ -10,6 +10,7 @@ lazy val common = project
   .in(file("modules/common"))
   .settings(moduleName := "mu-common")
   .settings(commonSettings)
+  .settings(codegenSettings)
 
 lazy val `internal-core` = project
   .in(file("modules/internal"))
@@ -528,6 +529,35 @@ lazy val `example-todolist-client` = project
   .settings(moduleName := "mu-rpc-example-todolist-client")
   .settings(exampleTodolistCommonSettings)
 
+/////////////////
+//// CODEGEN ////
+/////////////////
+
+lazy val `example-codegen-protocol` = project
+  .in(file("modules/examples/codegen/protocol"))
+  .dependsOn(`channel`, `common` % Configurations.CompilerPlugin)
+  .settings(coverageEnabled := false)
+  .settings(noPublishSettings)
+  .settings(moduleName := "mu-rpc-example-codegen-protocol")
+  .settings(
+    scalacOptions ++= Seq(
+      // recompile whenever plugin changes (in IDEA this might require using sbt shell for imports & builds)
+      "-Jdummy" + (`common`/Compile/packageBin).value.lastModified,
+      "-P:service-generator:outputDir=" + (Compile/sourceManaged).value
+    ),
+    autoCompilerPlugins := true,
+  )
+
+lazy val `example-codegen-app` = project
+  .in(file("modules/examples/codegen/app"))
+  .dependsOn(`example-codegen-protocol`)
+  .settings(coverageEnabled := false)
+  .settings(noPublishSettings)
+  .settings(moduleName := "mu-rpc-example-codegen-app")
+  .settings(
+    Compile/sourceGenerators += Def.task(((`example-codegen-protocol`/Compile/sourceManaged).value ** "*.scala").get)
+  )
+
 /////////////////////
 //// MARSHALLERS ////
 /////////////////////
@@ -594,6 +624,8 @@ lazy val allModules: Seq[ProjectReference] = Seq(
   `example-todolist-runtime`,
   `example-todolist-server`,
   `example-todolist-client`,
+  `example-codegen-protocol`,
+  `example-codegen-app`,
   seed,
   `benchmarks-vprev`,
   `benchmarks-vnext`,

@@ -85,6 +85,13 @@ object ProjectPlugin extends AutoPlugin {
       )
     )
 
+    lazy val codegenSettings: Seq[Def.Setting[_]] = Seq(
+      libraryDependencies ++= Seq(
+        "org.scala-lang" % "scala-compiler" % scalaVersion.value
+      ),
+      exportJars := true // for use in internal plugin dependencies
+    )
+
     lazy val internalMonixSettings: Seq[Def.Setting[_]] = Seq(
       libraryDependencies ++= Seq(
         %%("monix", V.monix),

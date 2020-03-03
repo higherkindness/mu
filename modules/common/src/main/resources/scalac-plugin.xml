@@ -1,0 +1,4 @@
+<plugin>
+    <name>service-generator</name>
+    <classname>higherkindness.mu.rpc.codegen.ServiceGenerator</classname>
+</plugin>
