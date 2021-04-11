@@ -18,6 +18,7 @@ package higherkindness.mu.rpc
 package channel
 
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import cats.data.Kleisli
 import higherkindness.mu.rpc.common.SC
 import io.grpc.ManagedChannel
@@ -41,7 +42,7 @@ abstract class ManagedChannelInterpreterTests extends RpcClientTestSuite {
 
       val managedChannelInterpreter = mkInterpreter(channelFor, channelConfigList)
 
-      val mc: ManagedChannel = managedChannelInterpreter.unsafeBuild
+      val mc: ManagedChannel = managedChannelInterpreter.build.unsafeRunSync()
 
       mc shouldBe a[ManagedChannel]
 
@@ -56,7 +57,7 @@ abstract class ManagedChannelInterpreterTests extends RpcClientTestSuite {
 
       val managedChannelInterpreter = mkInterpreter(channelFor, channelConfigList)
 
-      val mc: ManagedChannel = managedChannelInterpreter.unsafeBuild
+      val mc: ManagedChannel = managedChannelInterpreter.build.unsafeRunSync()
 
       mc shouldBe a[ManagedChannel]
 
@@ -85,7 +86,7 @@ abstract class ManagedChannelInterpreterTests extends RpcClientTestSuite {
 
       val managedChannelInterpreter = mkInterpreter(channelFor, channelConfigList)
 
-      val mc: ManagedChannel = managedChannelInterpreter.unsafeBuild
+      val mc: ManagedChannel = managedChannelInterpreter.build.unsafeRunSync()
 
       mc shouldBe a[ManagedChannel]
 

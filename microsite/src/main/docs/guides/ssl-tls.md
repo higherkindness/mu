@@ -69,16 +69,6 @@ We won't cover the details regarding creation of `RPCService`,
 these in the [gRPC server and client tutorial](../tutorials/grpc-server-client).
 
 ```scala mdoc:invisible
-trait CommonRuntime {
-
-  val EC: scala.concurrent.ExecutionContext =
-    scala.concurrent.ExecutionContext.Implicits.global
-
-  implicit val timer: cats.effect.Timer[cats.effect.IO]     = cats.effect.IO.timer(EC)
-  implicit val cs: cats.effect.ContextShift[cats.effect.IO] = cats.effect.IO.contextShift(EC)
-
-}
-
 import higherkindness.mu.rpc.protocol._
 
 object service {
@@ -110,13 +100,14 @@ import java.io.File
 import java.security.cert.X509Certificate
 
 import cats.effect.{IO, Resource}
+import cats.effect.std.Dispatcher
 import higherkindness.mu.rpc.server.netty.SetSslContext
 import higherkindness.mu.rpc.server.{AddService, GrpcConfig, GrpcServer}
 import io.grpc.internal.testing.TestUtils
 import io.grpc.netty.GrpcSslContexts
 import io.netty.handler.ssl.{ClientAuth, SslContext, SslProvider}
 
-trait Runtime extends CommonRuntime {
+trait Runtime {
 
   implicit val muRPCHandler: ServiceHandler[IO] =
     new ServiceHandler[IO]
@@ -141,15 +132,17 @@ trait Runtime extends CommonRuntime {
 
   // Add the SslContext to the list of GrpConfigs.
 
-  val grpcConfigs: IO[List[GrpcConfig]] =
-     Greeter.bindService[IO]
-       .map(AddService)
-       .map(c => List(SetSslContext(serverSslContext), c))
+  val grpcConfigs: Resource[IO, List[GrpcConfig]] =
+    Dispatcher[IO].evalMap { dispatcher =>
+      Greeter.bindService[IO](dispatcher)
+        .map(AddService)
+        .map(c => List(SetSslContext(serverSslContext), c))
+    }
 
   // Important: we have to create the server with Netty.
   // This is the only server transport that supports SSL encryption.
 
-  val server: IO[GrpcServer[IO]] = grpcConfigs.flatMap(GrpcServer.netty[IO](8080, _))
+  val server: Resource[IO, GrpcServer[IO]] = grpcConfigs.evalMap(GrpcServer.netty[IO](8080, _))
 
 }
 
@@ -167,7 +160,7 @@ import higherkindness.mu.rpc.channel.OverrideAuthority
 import higherkindness.mu.rpc.channel.netty.{NettyChannelInterpreter, NettyNegotiationType, NettySslContext}
 import io.grpc.netty.NegotiationType
 
-object MainApp extends CommonRuntime {
+object MainApp {
 
   // Load the certicate and private key files.
 

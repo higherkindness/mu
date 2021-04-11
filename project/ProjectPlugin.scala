@@ -16,24 +16,24 @@ object ProjectPlugin extends AutoPlugin {
     lazy val V = new {
       val avro4s: String                = "3.1.0"
       val betterMonadicFor: String      = "0.3.1"
-      val catsEffect: String            = "2.4.1"
+      val catsEffect: String            = "3.0.1"
       val circe: String                 = "0.13.0"
       val dockerItScala                 = "0.9.9"
       val dropwizard: String            = "4.1.19"
       val embeddedKafka: String         = "2.7.0"
       val enumeratum: String            = "1.6.1"
-      val fs2: String                   = "2.5.4"
-      val fs2Grpc: String               = "0.10.1"
-      val fs2Kafka: String              = "1.5.0"
+      val fs2: String                   = "3.0.1"
+      val fs2Grpc: String               = "1.0.1"
+      val fs2Kafka: String              = "2.0.0-RC1"
       val grpc: String                  = "1.36.1"
-      val http4s: String                = "0.21.22"
+      val http4s: String                = "1.0.0-M20"
       val kindProjector: String         = "0.11.3"
-      val log4cats: String              = "1.1.1"
+      val log4cats: String              = "2.0.1"
       val log4s: String                 = "1.9.0"
       val logback: String               = "1.2.3"
       val scalalogging: String          = "3.9.3" // used in tests
       val monix: String                 = "3.3.0"
-      val natchez: String               = "0.0.22"
+      val natchez: String               = "0.1.0"
       val nettySSL: String              = "2.0.34.Final"
       val paradise: String              = "2.1.1"
       val pbdirect: String              = "0.6.1"
@@ -50,7 +50,7 @@ object ProjectPlugin extends AutoPlugin {
 
     lazy val rpcServiceSettings: Seq[Def.Setting[_]] = Seq(
       libraryDependencies ++= Seq(
-        "org.typelevel"          %% "cats-effect"             % V.catsEffect,
+        "org.typelevel"          %% "cats-effect-std"         % V.catsEffect,
         "com.47deg"              %% "pbdirect"                % V.pbdirect,
         "com.beachape"           %% "enumeratum"              % V.enumeratum,
         "com.sksamuel.avro4s"    %% "avro4s-core"             % V.avro4s,
@@ -101,9 +101,9 @@ object ProjectPlugin extends AutoPlugin {
 
     lazy val clientCacheSettings: Seq[Def.Setting[_]] = Seq(
       libraryDependencies ++= Seq(
-        "org.log4s"     %% "log4s"       % V.log4s,
-        "co.fs2"        %% "fs2-core"    % V.fs2,
-        "org.typelevel" %% "cats-effect" % V.catsEffect,
+        "org.log4s"     %% "log4s"              % V.log4s,
+        "co.fs2"        %% "fs2-core"           % V.fs2,
+        "org.typelevel" %% "cats-effect-kernel" % V.catsEffect,
         compilerPlugin("com.olegpy" %% "better-monadic-for" % V.betterMonadicFor)
       )
     )
@@ -122,10 +122,13 @@ object ProjectPlugin extends AutoPlugin {
 
     lazy val httpSettings: Seq[Def.Setting[_]] = Seq(
       libraryDependencies ++= Seq(
-        "org.http4s" %% "http4s-dsl"          % V.http4s,
-        "org.http4s" %% "http4s-blaze-server" % V.http4s,
-        "org.http4s" %% "http4s-circe"        % V.http4s,
-        "io.grpc"     % "grpc-stub"           % V.grpc
+        "org.http4s"    %% "http4s-core"         % V.http4s exclude ("org.typelevel", "literally"),
+        "org.http4s"    %% "http4s-dsl"          % V.http4s,
+        "org.http4s"    %% "http4s-blaze-server" % V.http4s,
+        "org.http4s"    %% "http4s-circe"        % V.http4s,
+        "com.comcast"   %% "ip4s-core"           % "3.0.1", // issue with http4s version
+        "org.typelevel" %% "literally"           % "1.0.0", // issue with http4s version
+        "io.grpc"        % "grpc-stub"           % V.grpc
       )
     )
 
@@ -163,8 +166,8 @@ object ProjectPlugin extends AutoPlugin {
     lazy val kafkaSettings: Seq[Def.Setting[_]] = Seq(
       libraryDependencies ++= Seq(
         "com.github.fd4s"            %% "fs2-kafka"       % V.fs2Kafka,
-        "io.chrisdavenport"          %% "log4cats-slf4j"  % V.log4cats,
-        "io.chrisdavenport"          %% "log4cats-core"   % V.log4cats,
+        "org.typelevel"              %% "log4cats-slf4j"  % V.log4cats,
+        "org.typelevel"              %% "log4cats-core"   % V.log4cats,
         "com.sksamuel.avro4s"        %% "avro4s-core"     % V.avro4s,
         "ch.qos.logback"              % "logback-classic" % V.logback,
         "io.github.embeddedkafka"    %% "embedded-kafka"  % V.embeddedKafka % Test,
@@ -184,15 +187,15 @@ object ProjectPlugin extends AutoPlugin {
         baseDirectory.value.getParentFile / "shared" / "src" / "test" / "scala"
       },
       libraryDependencies ++= Seq(
-        "io.grpc"            % "grpc-all"         % V.grpc,
-        "io.chrisdavenport" %% "log4cats-core"    % V.log4cats,
-        "io.chrisdavenport" %% "log4cats-slf4j"   % V.log4cats,
-        "org.slf4j"          % "log4j-over-slf4j" % V.slf4j,
-        "org.slf4j"          % "jul-to-slf4j"     % V.slf4j,
-        "org.slf4j"          % "jcl-over-slf4j"   % V.slf4j,
-        "org.slf4j"          % "slf4j-api"        % V.slf4j,
-        "ch.qos.logback"     % "logback-core"     % V.logback,
-        "ch.qos.logback"     % "logback-classic"  % V.logback
+        "io.grpc"        % "grpc-all"         % V.grpc,
+        "org.typelevel" %% "log4cats-slf4j"   % V.log4cats,
+        "org.typelevel" %% "log4cats-core"    % V.log4cats,
+        "org.slf4j"      % "log4j-over-slf4j" % V.slf4j,
+        "org.slf4j"      % "jul-to-slf4j"     % V.slf4j,
+        "org.slf4j"      % "jcl-over-slf4j"   % V.slf4j,
+        "org.slf4j"      % "slf4j-api"        % V.slf4j,
+        "ch.qos.logback" % "logback-core"     % V.logback,
+        "ch.qos.logback" % "logback-classic"  % V.logback
       )
     )
 

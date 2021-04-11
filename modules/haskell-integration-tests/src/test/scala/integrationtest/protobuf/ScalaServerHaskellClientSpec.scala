@@ -20,11 +20,12 @@ import integrationtest._
 import weather._
 import higherkindness.mu.rpc.server.{AddService, GrpcServer}
 
-import cats.effect.{ContextShift, IO}
+import cats.effect.{IO, Resource}
+import cats.effect.std.Dispatcher
+import cats.effect.unsafe.implicits.global
 
 import org.scalatest.flatspec.AnyFlatSpec
 
-import scala.concurrent.ExecutionContext
 import org.scalatest.BeforeAndAfterAll
 
 class ScalaServerHaskellClientSpec
@@ -34,25 +35,22 @@ class ScalaServerHaskellClientSpec
 
   def clientExecutableName: String = "protobuf-client"
 
-  implicit val CS: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
-
   implicit val service: WeatherService[IO] = new MyWeatherService[IO]
 
-  private val startServer: IO[Unit] = for {
-    serviceDef <- WeatherService.bindService[IO]
-    serverDef  <- GrpcServer.default[IO](Constants.ProtobufPort, List(AddService(serviceDef)))
-    _          <- GrpcServer.server[IO](serverDef)
+  private val runServer: Resource[IO, Unit] = for {
+    dispatcher <- Dispatcher[IO]
+    serviceDef <- Resource.eval(WeatherService.bindService[IO](dispatcher))
+    serverDef <- Resource.eval(
+      GrpcServer.default[IO](Constants.ProtobufPort, List(AddService(serviceDef)))
+    )
+    _ <- GrpcServer.serverResource[IO](serverDef)
   } yield ()
 
   private var cancelToken: IO[Unit] = IO.unit
 
   override def beforeAll(): Unit = {
-    cancelToken = startServer.unsafeRunCancelable {
-      case Left(e) =>
-        println(s"Server failed! $e")
-      case Right(_) =>
-        println("Server completed (this should never happen)")
-    }
+    val (_, cancel) = runServer.allocated.unsafeRunSync()
+    cancelToken = cancel
     Thread.sleep(500) // give the server a chance to start up
   }
 

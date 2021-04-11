@@ -19,6 +19,7 @@ package higherkindness.mu.rpc.benchmarks
 import java.util.concurrent.TimeUnit
 
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import higherkindness.mu.rpc.benchmarks.shared.Utils._
 import higherkindness.mu.rpc.benchmarks.shared.models._
 import higherkindness.mu.rpc.benchmarks.shared.protocols.PersonServiceAvroWithSchema

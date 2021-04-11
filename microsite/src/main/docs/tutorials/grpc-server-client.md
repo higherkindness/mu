@@ -74,19 +74,22 @@ We're going to use cats-effect `IO` as our concrete IO monad, and we'll make use
 `IOApp` from cats-effect.
 
 ```scala mdoc:silent
-import cats.effect.{IO, IOApp, ExitCode}
+import cats.effect.{IO, IOApp, Resource}
+import cats.effect.std.Dispatcher
 import hello.Greeter
 import higherkindness.mu.rpc.server.{GrpcServer, AddService}
 
-object Server extends IOApp {
+object Server extends IOApp.Simple {
 
   implicit val greeter: Greeter[IO] = new HappyGreeter[IO]  // 1
 
-  def run(args: List[String]): IO[ExitCode] = for {
-    serviceDef <- Greeter.bindService[IO]                                      // 2
-    server     <- GrpcServer.default[IO](12345, List(AddService(serviceDef)))  // 3
-    _          <- GrpcServer.server[IO](server)                                // 4
-  } yield ExitCode.Success
+  private def makeServer: Resource[IO, GrpcServer[IO]] = for {
+    dispatcher <- Dispatcher[IO]
+    serviceDef <- Resource.eval(Greeter.bindService[IO](dispatcher))                          // 2
+    server     <- Resource.eval(GrpcServer.default[IO](12345, List(AddService(serviceDef))))  // 3
+  } yield server
+
+  def run: IO[Unit] = makeServer.use(GrpcServer.server[IO]) // 4
 
 }
 ```
@@ -126,22 +129,22 @@ Here is a tiny demo that makes a request to the `SayHello` endpoint and
 prints out the reply to the console.
 
 ```scala mdoc:silent
-import cats.effect.{IO, IOApp, Resource, ExitCode}
+import cats.effect.{IO, IOApp, Resource}
 import hello.{Greeter, HelloRequest}
 import higherkindness.mu.rpc._
 
-object ClientDemo extends IOApp {
+object ClientDemo extends IOApp.Simple {
 
   val channelFor: ChannelFor = ChannelForAddress("localhost", 12345)  // 1
 
   val clientResource: Resource[IO, Greeter[IO]] = Greeter.client[IO](channelFor)  // 2
 
-  def run(args: List[String]): IO[ExitCode] =
+  def run: IO[Unit] =
     for {
       response   <- clientResource.use(c => c.SayHello(HelloRequest(name = "Chris")))  // 3
       serverMood = if (response.happy) "happy" else "unhappy"
       _          <- IO(println(s"The $serverMood server says '${response.greeting}'"))
-    } yield ExitCode.Success
+    } yield ()
 
 }
 ```

@@ -19,8 +19,9 @@ package higherkindness.mu.rpc.internal.server.fs2
 import fs2.Stream
 
 import cats.data.Kleisli
+import cats.effect.kernel.Async
+import cats.effect.std.Dispatcher
 import cats.syntax.functor._
-import cats.effect.ConcurrentEffect
 import io.grpc.{Metadata, MethodDescriptor, ServerCallHandler}
 import higherkindness.mu.rpc.internal.server.extractTracingKernel
 import higherkindness.mu.rpc.protocol.{CompressionType, Gzip}
@@ -40,38 +41,42 @@ object handlers {
     }
 
   // Note: this handler is never actually used anywhere. Delete?
-  def unary[F[_]: ConcurrentEffect, Req, Res](
+  def unary[F[_]: Async, Req, Res](
       f: (Req, Metadata) => F[Res],
-      compressionType: CompressionType
+      compressionType: CompressionType,
+      dispatcher: Dispatcher[F]
   ): ServerCallHandler[Req, Res] =
-    Fs2ServerCallHandler[F].unaryToUnaryCall[Req, Res](
+    Fs2ServerCallHandler[F](dispatcher).unaryToUnaryCall[Req, Res](
       f,
       serverCallOptions(compressionType)
     )
 
-  def clientStreaming[F[_]: ConcurrentEffect, Req, Res](
+  def clientStreaming[F[_]: Async, Req, Res](
       f: (Stream[F, Req], Metadata) => F[Res],
-      compressionType: CompressionType
+      compressionType: CompressionType,
+      dispatcher: Dispatcher[F]
   ): ServerCallHandler[Req, Res] =
-    Fs2ServerCallHandler[F].streamingToUnaryCall[Req, Res](
+    Fs2ServerCallHandler[F](dispatcher).streamingToUnaryCall[Req, Res](
       f,
       serverCallOptions(compressionType)
     )
 
-  def serverStreaming[F[_]: ConcurrentEffect, Req, Res](
+  def serverStreaming[F[_]: Async, Req, Res](
       f: (Req, Metadata) => F[Stream[F, Res]],
-      compressionType: CompressionType
+      compressionType: CompressionType,
+      dispatcher: Dispatcher[F]
   ): ServerCallHandler[Req, Res] =
-    Fs2ServerCallHandler[F].unaryToStreamingCall[Req, Res](
+    Fs2ServerCallHandler[F](dispatcher).unaryToStreamingCall[Req, Res](
       (req, metadata) => Stream.force(f(req, metadata)),
       serverCallOptions(compressionType)
     )
 
-  def bidiStreaming[F[_]: ConcurrentEffect, Req, Res](
+  def bidiStreaming[F[_]: Async, Req, Res](
       f: (Stream[F, Req], Metadata) => F[Stream[F, Res]],
-      compressionType: CompressionType
+      compressionType: CompressionType,
+      dispatcher: Dispatcher[F]
   ): ServerCallHandler[Req, Res] =
-    Fs2ServerCallHandler[F].streamingToStreamingCall[Req, Res](
+    Fs2ServerCallHandler[F](dispatcher).streamingToStreamingCall[Req, Res](
       (stream, metadata) => Stream.force(f(stream, metadata)),
       serverCallOptions(compressionType)
     )
@@ -79,63 +84,71 @@ object handlers {
   private type Traced[F[_], A]         = Kleisli[F, Span[F], A]
   private type StreamOfTraced[F[_], A] = Stream[Kleisli[F, Span[F], *], A]
 
-  def tracingClientStreaming[F[_]: ConcurrentEffect, Req, Res](
+  def tracingClientStreaming[F[_]: Async, Req, Res](
       f: StreamOfTraced[F, Req] => Traced[F, Res],
       descriptor: MethodDescriptor[Req, Res],
       entrypoint: EntryPoint[F],
-      compressionType: CompressionType
+      compressionType: CompressionType,
+      dispatcher: Dispatcher[F]
   ): ServerCallHandler[Req, Res] =
     clientStreaming[F, Req, Res](
       { (req: Stream[F, Req], metadata: Metadata) =>
         val kernel                          = extractTracingKernel(metadata)
-        val streamK: StreamOfTraced[F, Req] = req.translateInterruptible(Kleisli.liftK[F, Span[F]])
-        entrypoint.continueOrElseRoot(descriptor.getFullMethodName(), kernel).use[F, Res] { span =>
-          f(streamK).run(span)
-        }
+        val streamK: StreamOfTraced[F, Req] = req.translate(Kleisli.liftK[F, Span[F]])
+        entrypoint
+          .continueOrElseRoot(descriptor.getFullMethodName(), kernel)
+          .use[Res](f(streamK).run)
       },
-      compressionType
+      compressionType,
+      dispatcher
     )
 
-  def tracingServerStreaming[F[_]: ConcurrentEffect, Req, Res](
+  def tracingServerStreaming[F[_]: Async, Req, Res](
       f: Req => Traced[F, StreamOfTraced[F, Res]],
       descriptor: MethodDescriptor[Req, Res],
       entrypoint: EntryPoint[F],
-      compressionType: CompressionType
+      compressionType: CompressionType,
+      dispatcher: Dispatcher[F]
   ): ServerCallHandler[Req, Res] =
     serverStreaming[F, Req, Res](
       { (req: Req, metadata: Metadata) =>
         val kernel = extractTracingKernel(metadata)
         entrypoint
           .continueOrElseRoot(descriptor.getFullMethodName(), kernel)
-          .use[F, Stream[F, Res]] { span =>
+          .use[Stream[F, Res]] { span =>
             val kleisli: Traced[F, StreamOfTraced[F, Res]] = f(req)
             val fStreamK: F[StreamOfTraced[F, Res]]        = kleisli.run(span)
-            fStreamK.map(_.translateInterruptible(Kleisli.applyK[F, Span[F]](span)))
+            fStreamK.map(_.translate(Kleisli.applyK[F, Span[F]](span)))
           }
       },
-      compressionType
+      compressionType,
+      dispatcher
     )
 
-  def tracingBidiStreaming[F[_]: ConcurrentEffect, Req, Res](
+  // does this work?  liftk and applyk cancel each other
+  // only tracing `F` ?
+  def tracingBidiStreaming[F[_]: Async, Req, Res](
       f: StreamOfTraced[F, Req] => Traced[F, StreamOfTraced[F, Res]],
       descriptor: MethodDescriptor[Req, Res],
       entrypoint: EntryPoint[F],
-      compressionType: CompressionType
+      compressionType: CompressionType,
+      dispatcher: Dispatcher[F]
   ): ServerCallHandler[Req, Res] =
     bidiStreaming[F, Req, Res](
       { (req: Stream[F, Req], metadata: Metadata) =>
         val kernel = extractTracingKernel(metadata)
         val reqStreamK: StreamOfTraced[F, Req] =
-          req.translateInterruptible(Kleisli.liftK[F, Span[F]])
+          req.translate(Kleisli.liftK[F, Span[F]])
         entrypoint
           .continueOrElseRoot(descriptor.getFullMethodName(), kernel)
-          .use[F, Stream[F, Res]] { span =>
+          .use[Stream[F, Res]] { span =>
             val kleisli: Traced[F, StreamOfTraced[F, Res]] = f(reqStreamK)
             val fStreamK: F[StreamOfTraced[F, Res]]        = kleisli.run(span)
-            fStreamK.map(_.translateInterruptible(Kleisli.applyK[F, Span[F]](span)))
+            fStreamK.map(_.translate(Kleisli.applyK[F, Span[F]](span)))
           }
       },
-      compressionType
+      compressionType,
+      dispatcher
     )
 
 }

@@ -20,6 +20,7 @@ package server
 import java.net.InetSocketAddress
 
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import higherkindness.mu.rpc.common.SC
 
 class ServerConfigTests extends RpcServerTestSuite {

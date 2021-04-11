@@ -63,25 +63,6 @@ class HappyGreeter[F[_]: Applicative] extends Greeter[F] {
 
 We're going to write a test to check that the service is always happy.
 
-## cats-effect implicits
-
-In our test we'll use cats-effect `IO` as our concrete effect monad.
-
-We need to provide a couple of implicits to make that work:
-
-```scala mdoc:silent
-import cats.effect.{IO, ContextShift, Timer}
-import scala.concurrent.ExecutionContext
-
-trait CatsEffectImplicits {
-
-  val EC: ExecutionContext = ExecutionContext.global
-
-  implicit val timer: Timer[IO]     = IO.timer(EC)
-  implicit val cs: ContextShift[IO] = IO.contextShift(EC)
-
-}
-```
 
 ## mu-rpc-testing
 
@@ -103,10 +84,11 @@ can make requests to the service.
 
 ```scala mdoc:silent
 import hello._
-import cats.effect.Resource
+import cats.effect.{IO, Resource}
+import cats.effect.std.Dispatcher
 import higherkindness.mu.rpc.testing.servers.withServerChannel
 
-trait ServiceAndClient extends CatsEffectImplicits {
+trait ServiceAndClient {
 
   implicit val greeter: Greeter[IO] = new HappyGreeter[IO]
 
@@ -115,8 +97,9 @@ trait ServiceAndClient extends CatsEffectImplicits {
    * connected to each other via an in-memory channel.
    */
   val clientResource: Resource[IO, Greeter[IO]] = for {
-    sc        <- withServerChannel(Greeter.bindService[IO])
-    clientRes <- Greeter.clientFromChannel[IO](IO.pure(sc.channel))
+    dispatcher <- Dispatcher[IO]
+    sc         <- withServerChannel(Greeter.bindService[IO](dispatcher))
+    clientRes  <- Greeter.clientFromChannel[IO](IO.pure(sc.channel))
   } yield clientRes
 
 }
@@ -134,6 +117,7 @@ With the service and client in place, the test consists of using the client to
 make a request and then asserting that the response matches what we expect.
 
 ```scala mdoc:silent
+import cats.effect.unsafe.implicits.global
 import hello._
 import org.scalatest.flatspec.AnyFlatSpec
 

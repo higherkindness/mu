@@ -18,6 +18,7 @@ package higherkindness.mu.rpc
 package internal
 
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import higherkindness.mu.rpc.common.RpcBaseTestSuite
 import higherkindness.mu.rpc.internal.service.GRPCServiceDefBuilder
 import io.grpc._

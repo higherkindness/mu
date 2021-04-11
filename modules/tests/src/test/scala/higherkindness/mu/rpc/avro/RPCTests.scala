@@ -18,39 +18,43 @@ package higherkindness.mu.rpc
 package avro
 
 import cats.effect.{IO, Resource}
+import cats.effect.std.Dispatcher
+import cats.effect.unsafe.implicits.global
 import io.grpc.ServerServiceDefinition
 import higherkindness.mu.rpc.common.{A => _, _}
-import higherkindness.mu.rpc.testing.servers.{withServerChannel, ServerChannel}
+import higherkindness.mu.rpc.testing.servers.withServerChannel
 import org.scalatest._
 import shapeless.{:+:, CNil, Coproduct}
 
 class RPCTests extends RpcBaseTestSuite {
 
-  import TestsImplicits._
   import higherkindness.mu.rpc.avro.Utils._
   import higherkindness.mu.rpc.avro.Utils.implicits._
 
-  def createClient(
-      sc: ServerChannel
-  ): Resource[ConcurrentMonad, service.RPCService[ConcurrentMonad]] =
-    service.RPCService.clientFromChannel[ConcurrentMonad](IO(sc.channel))
-
-  def runSucceedAssertion[A](ssd: ConcurrentMonad[ServerServiceDefinition], response: A)(
+  def runSucceedAssertion[A](
+      ssd: Dispatcher[ConcurrentMonad] => ConcurrentMonad[ServerServiceDefinition],
+      response: A
+  )(
       f: service.RPCService[ConcurrentMonad] => ConcurrentMonad[A]
   ): Assertion =
-    withServerChannel[ConcurrentMonad](ssd)
-      .flatMap(createClient)
-      .use(f)
-      .unsafeRunSync() shouldBe response
+    createClientFromServer(ssd).use(f).unsafeRunSync() shouldBe response
 
   def runFailedAssertion[A](
-      ssd: ConcurrentMonad[ServerServiceDefinition]
+      ssd: Dispatcher[ConcurrentMonad] => ConcurrentMonad[ServerServiceDefinition]
   )(f: service.RPCService[ConcurrentMonad] => ConcurrentMonad[A]): Assertion =
-    withServerChannel[ConcurrentMonad](ssd)
-      .flatMap(createClient)
+    createClientFromServer(ssd)
       .use(f)
       .attempt
       .unsafeRunSync() shouldBe an[Left[io.grpc.StatusRuntimeException, A]]
+
+  private def createClientFromServer(
+      ssd: Dispatcher[ConcurrentMonad] => ConcurrentMonad[ServerServiceDefinition]
+  ): Resource[ConcurrentMonad, service.RPCService[ConcurrentMonad]] =
+    for {
+      dispatcher <- Dispatcher[ConcurrentMonad]
+      channel    <- withServerChannel[ConcurrentMonad](ssd(dispatcher))
+      client     <- service.RPCService.clientFromChannel[ConcurrentMonad](IO(channel.channel))
+    } yield client
 
   "An AvroWithSchema service with an updated request model" can {
 

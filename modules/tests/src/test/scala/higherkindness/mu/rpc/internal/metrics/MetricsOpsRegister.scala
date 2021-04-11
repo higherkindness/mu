@@ -17,7 +17,7 @@
 package higherkindness.mu.rpc.internal.metrics
 
 import cats.effect.IO
-import cats.effect.concurrent.Ref
+import cats.effect.kernel.Ref
 import cats.syntax.apply._
 import higherkindness.mu.rpc.internal.interceptors.GrpcMethodInfo
 import io.grpc.Status

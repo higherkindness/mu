@@ -16,8 +16,8 @@
 
 package higherkindness.mu.rpc.internal
 
-import cats.effect.Sync
-import io.grpc.{Metadata, Status, StatusException, StatusRuntimeException}
+import cats.effect.kernel.Sync
+import io.grpc.Metadata
 import io.grpc.Metadata.{ASCII_STRING_MARSHALLER, BINARY_HEADER_SUFFIX, Key}
 import io.grpc.stub.{ServerCallStreamObserver, StreamObserver}
 import higherkindness.mu.rpc.protocol._
@@ -34,30 +34,6 @@ package object server {
       case (o: ServerCallStreamObserver[_], Gzip) => Sync[F].delay(o.setCompression("gzip"))
       case _                                      => Sync[F].unit
     }
-
-  private[internal] def completeObserver[F[_]: Sync, A](
-      observer: StreamObserver[A]
-  ): Either[Throwable, A] => F[Unit] = {
-    case Right(value) =>
-      Sync[F].delay {
-        observer.onNext(value)
-        observer.onCompleted()
-      }
-    case Left(s: StatusException) =>
-      Sync[F].delay {
-        observer.onError(s)
-      }
-    case Left(s: StatusRuntimeException) =>
-      Sync[F].delay {
-        observer.onError(s)
-      }
-    case Left(e) =>
-      Sync[F].delay {
-        observer.onError(
-          Status.INTERNAL.withDescription(e.getMessage).withCause(e).asException()
-        )
-      }
-  }
 
   private[internal] def extractTracingKernel(headers: Metadata): Kernel = {
     val asciiHeaders = headers

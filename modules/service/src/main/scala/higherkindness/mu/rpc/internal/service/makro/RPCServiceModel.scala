@@ -143,22 +143,22 @@ class RPCServiceModel[C <: Context](val c: C) {
     private val serverCallDescriptorsAndHandlers: List[Tree] =
       rpcRequests.map(_.descriptorAndHandler)
 
-    val ceImplicit: Tree        = q"CE: _root_.cats.effect.ConcurrentEffect[$F]"
-    val csImplicit: Tree        = q"CS: _root_.cats.effect.ContextShift[$F]"
+    val asyncImplicit: Tree     = q"F: _root_.cats.effect.Async[$F]"
     val schedulerImplicit: Tree = q"S: _root_.monix.execution.Scheduler"
 
-    val bindImplicits: List[Tree] = ceImplicit :: q"algebra: $serviceName[$F]" :: rpcRequests
+    val bindImplicits: List[Tree] = asyncImplicit :: q"algebra: $serviceName[$F]" :: rpcRequests
       .find(_.operation.isMonixObservable)
       .map(_ => schedulerImplicit)
       .toList
 
-    val classImplicits: List[Tree] = ceImplicit :: csImplicit :: rpcRequests
+    val classImplicits: List[Tree] = asyncImplicit :: rpcRequests
       .find(_.operation.isMonixObservable)
       .map(_ => schedulerImplicit)
       .toList
 
+    // dispatcher used out of scope ?
     val bindService: DefDef = q"""
-      def bindService[$F_](implicit ..$bindImplicits): $F[_root_.io.grpc.ServerServiceDefinition] =
+      def bindService[$F_](dispatcher: _root_.cats.effect.std.Dispatcher[$F])(implicit ..$bindImplicits): $F[_root_.io.grpc.ServerServiceDefinition] =
         _root_.higherkindness.mu.rpc.internal.service.GRPCServiceDefBuilder.build[$F](
           ${lit(fullServiceName)},
           ..$serverCallDescriptorsAndHandlers
@@ -169,11 +169,12 @@ class RPCServiceModel[C <: Context](val c: C) {
       rpcRequests.map(_.descriptorAndTracingHandler)
 
     val tracingAlgebra = q"algebra: $serviceName[$kleisliFSpanF]"
-    val bindTracingServiceImplicits: List[Tree] = ceImplicit :: tracingAlgebra :: rpcRequests
+    val bindTracingServiceImplicits: List[Tree] = asyncImplicit :: tracingAlgebra :: rpcRequests
       .find(_.operation.isMonixObservable)
       .map(_ => schedulerImplicit)
       .toList
 
+    // TODO needs dispatcher
     val bindTracingService: DefDef = q"""
       def bindTracingService[$F_](entrypoint: _root_.natchez.EntryPoint[$F])
                                  (implicit ..$bindTracingServiceImplicits): $F[_root_.io.grpc.ServerServiceDefinition] =
@@ -209,12 +210,12 @@ class RPCServiceModel[C <: Context](val c: C) {
         _root_.cats.effect.Resource.make(
           new _root_.higherkindness.mu.rpc.channel.ManagedChannelInterpreter[$F](channelFor, channelConfigList).build
         )(channel =>
-          CE.void(CE.delay(channel.shutdown()))
+          F.void(F.delay(channel.shutdown()))
         ).flatMap(ch =>
           _root_.cats.effect.Resource.make[F, $serviceName[$F]](
-            CE.delay(new $Client[$F](ch, options))
+            F.delay(new $Client[$F](ch, options))
           )($anonymousParam =>
-            CE.unit
+            F.unit
           )
         )
       """.suppressWarts("DefaultArguments")
@@ -226,28 +227,28 @@ class RPCServiceModel[C <: Context](val c: C) {
         options: _root_.io.grpc.CallOptions = _root_.io.grpc.CallOptions.DEFAULT
       )(implicit ..$classImplicits): _root_.cats.effect.Resource[$F, $serviceName[$F]] =
         _root_.cats.effect.Resource.make(channel)(channel =>
-          CE.void(CE.delay(channel.shutdown()))
+          F.void(F.delay(channel.shutdown()))
         ).flatMap(ch =>
           _root_.cats.effect.Resource.make[$F, $serviceName[$F]](
-            CE.delay(new $Client[$F](ch, options))
+            F.delay(new $Client[$F](ch, options))
           )($anonymousParam =>
-            CE.unit
+            F.unit
           )
         )
       """.suppressWarts("DefaultArguments")
 
-    val unsafeClient: DefDef =
-      q"""
-      def unsafeClient[$F_](
-        channelFor: _root_.higherkindness.mu.rpc.ChannelFor,
-        channelConfigList: List[_root_.higherkindness.mu.rpc.channel.ManagedChannelConfig] =
-          List(_root_.higherkindness.mu.rpc.channel.UsePlaintext()),
-        options: _root_.io.grpc.CallOptions = _root_.io.grpc.CallOptions.DEFAULT
-      )(implicit ..$classImplicits): $serviceName[$F] = {
-        val managedChannelInterpreter =
-          new _root_.higherkindness.mu.rpc.channel.ManagedChannelInterpreter[$F](channelFor, channelConfigList).unsafeBuild
-        new $Client[$F](managedChannelInterpreter, options)
-      }""".suppressWarts("DefaultArguments")
+    // val unsafeClient: DefDef =
+    //   q"""
+    //   def unsafeClient[$F_](
+    //     channelFor: _root_.higherkindness.mu.rpc.ChannelFor,
+    //     channelConfigList: List[_root_.higherkindness.mu.rpc.channel.ManagedChannelConfig] =
+    //       List(_root_.higherkindness.mu.rpc.channel.UsePlaintext()),
+    //     options: _root_.io.grpc.CallOptions = _root_.io.grpc.CallOptions.DEFAULT
+    //   )(implicit ..$classImplicits): $serviceName[$F] = {
+    //     val managedChannelInterpreter =
+    //       new _root_.higherkindness.mu.rpc.channel.ManagedChannelInterpreter[$F](channelFor, channelConfigList).unsafeBuild
+    //     new $Client[$F](managedChannelInterpreter, options)
+    //   }""".suppressWarts("DefaultArguments")
 
     val unsafeClientFromChannel: DefDef =
       q"""
@@ -310,18 +311,18 @@ class RPCServiceModel[C <: Context](val c: C) {
         )
       """.suppressWarts("DefaultArguments")
 
-    val unsafeTracingClient: DefDef =
-      q"""
-      def unsafeTracingClient[$F_](
-        channelFor: _root_.higherkindness.mu.rpc.ChannelFor,
-        channelConfigList: List[_root_.higherkindness.mu.rpc.channel.ManagedChannelConfig] =
-          List(_root_.higherkindness.mu.rpc.channel.UsePlaintext()),
-        options: _root_.io.grpc.CallOptions = _root_.io.grpc.CallOptions.DEFAULT
-      )(implicit ..$classImplicits): $serviceName[$kleisliFSpanF] = {
-        val managedChannelInterpreter =
-          new _root_.higherkindness.mu.rpc.channel.ManagedChannelInterpreter[$F](channelFor, channelConfigList).unsafeBuild
-        new $TracingClient[$F](managedChannelInterpreter, options)
-      }""".suppressWarts("DefaultArguments")
+    // val unsafeTracingClient: DefDef =
+    //   q"""
+    //   def unsafeTracingClient[$F_](
+    //     channelFor: _root_.higherkindness.mu.rpc.ChannelFor,
+    //     channelConfigList: List[_root_.higherkindness.mu.rpc.channel.ManagedChannelConfig] =
+    //       List(_root_.higherkindness.mu.rpc.channel.UsePlaintext()),
+    //     options: _root_.io.grpc.CallOptions = _root_.io.grpc.CallOptions.DEFAULT
+    //   )(implicit ..$classImplicits): $serviceName[$kleisliFSpanF] = {
+    //     val managedChannelInterpreter =
+    //       new _root_.higherkindness.mu.rpc.channel.ManagedChannelInterpreter[$F](channelFor, channelConfigList).unsafeBuild
+    //     new $TracingClient[$F](managedChannelInterpreter, options)
+    //   }""".suppressWarts("DefaultArguments")
 
     val unsafeTracingClientFromChannel: DefDef =
       q"""

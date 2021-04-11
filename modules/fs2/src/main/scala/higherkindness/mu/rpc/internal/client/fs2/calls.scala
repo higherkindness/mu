@@ -19,65 +19,73 @@ package higherkindness.mu.rpc.internal.client.fs2
 import fs2.Stream
 
 import cats.data.Kleisli
-import cats.effect.ConcurrentEffect
+import cats.effect.kernel.Async
+import cats.effect.std.Dispatcher
 import cats.syntax.applicative._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import higherkindness.mu.rpc.internal.client.tracingKernelToHeaders
-import io.grpc.{CallOptions, Channel, Metadata, MethodDescriptor}
+import io.grpc.{CallOptions, Channel, Metadata, MethodDescriptor, StatusRuntimeException}
 import org.lyranthe.fs2_grpc.java_runtime.client.Fs2ClientCall
 import natchez.Span
 
 object calls {
 
-  def unary[F[_]: ConcurrentEffect, Req, Res](
+  private val errorAdapter: StatusRuntimeException => Option[Exception] = _ => None
+
+  def unary[F[_]: Async, Req, Res](
       request: Req,
       descriptor: MethodDescriptor[Req, Res],
       channel: Channel,
       options: CallOptions,
+      dispatcher: Dispatcher[F],
       headers: Metadata = new Metadata()
   ): F[Res] =
-    Fs2ClientCall[F](channel, descriptor, options)
+    Fs2ClientCall[F](channel, descriptor, options, dispatcher, errorAdapter)
       .flatMap(_.unaryToUnaryCall(request, headers))
 
-  def clientStreaming[F[_]: ConcurrentEffect, Req, Res](
+  def clientStreaming[F[_]: Async, Req, Res](
       input: Stream[F, Req],
       descriptor: MethodDescriptor[Req, Res],
       channel: Channel,
       options: CallOptions,
+      dispatcher: Dispatcher[F],
       headers: Metadata = new Metadata()
   ): F[Res] =
-    Fs2ClientCall[F](channel, descriptor, options)
+    Fs2ClientCall[F](channel, descriptor, options, dispatcher, errorAdapter)
       .flatMap(_.streamingToUnaryCall(input, headers))
 
-  def serverStreaming[F[_]: ConcurrentEffect, Req, Res](
+  def serverStreaming[F[_]: Async, Req, Res](
       request: Req,
       descriptor: MethodDescriptor[Req, Res],
       channel: Channel,
       options: CallOptions,
+      dispatcher: Dispatcher[F],
       headers: Metadata = new Metadata()
   ): F[Stream[F, Res]] =
     Stream
-      .eval(Fs2ClientCall[F](channel, descriptor, options))
+      .eval(Fs2ClientCall[F](channel, descriptor, options, dispatcher, errorAdapter))
       .flatMap(_.unaryToStreamingCall(request, headers))
       .pure[F]
 
-  def bidiStreaming[F[_]: ConcurrentEffect, Req, Res](
+  def bidiStreaming[F[_]: Async, Req, Res](
       input: Stream[F, Req],
       descriptor: MethodDescriptor[Req, Res],
       channel: Channel,
       options: CallOptions,
+      dispatcher: Dispatcher[F],
       headers: Metadata = new Metadata()
   ): F[Stream[F, Res]] =
     Stream
-      .eval(Fs2ClientCall[F](channel, descriptor, options))
+      .eval(Fs2ClientCall[F](channel, descriptor, options, dispatcher, errorAdapter))
       .flatMap(_.streamingToStreamingCall(input, headers))
       .pure[F]
 
-  def tracingClientStreaming[F[_]: ConcurrentEffect, Req, Res](
+  def tracingClientStreaming[F[_]: Async, Req, Res](
       input: Stream[Kleisli[F, Span[F], *], Req],
       descriptor: MethodDescriptor[Req, Res],
       channel: Channel,
+      dispatcher: Dispatcher[F],
       options: CallOptions
   ): Kleisli[F, Span[F], Res] =
     Kleisli[F, Span[F], Res] { parentSpan =>
@@ -85,22 +93,24 @@ object calls {
         span.kernel.flatMap { kernel =>
           val headers = tracingKernelToHeaders(kernel)
           val streamF: Stream[F, Req] =
-            input.translateInterruptible(Kleisli.applyK[F, Span[F]](span))
+            input.translate(Kleisli.applyK[F, Span[F]](span))
           clientStreaming[F, Req, Res](
             streamF,
             descriptor,
             channel,
             options,
+            dispatcher,
             headers
           )
         }
       }
     }
 
-  def tracingServerStreaming[F[_]: ConcurrentEffect, Req, Res](
+  def tracingServerStreaming[F[_]: Async, Req, Res](
       request: Req,
       descriptor: MethodDescriptor[Req, Res],
       channel: Channel,
+      dispatcher: Dispatcher[F],
       options: CallOptions
   ): Kleisli[F, Span[F], Stream[Kleisli[F, Span[F], *], Res]] =
     Kleisli[F, Span[F], Stream[Kleisli[F, Span[F], *], Res]] { parentSpan =>
@@ -108,17 +118,18 @@ object calls {
         span.kernel.map { kernel =>
           val headers = tracingKernelToHeaders(kernel)
           Stream
-            .eval(Fs2ClientCall[F](channel, descriptor, options))
+            .eval(Fs2ClientCall[F](channel, descriptor, options, dispatcher, errorAdapter))
             .flatMap(_.unaryToStreamingCall(request, headers))
-            .translateInterruptible(Kleisli.liftK[F, Span[F]])
+            .translate(Kleisli.liftK[F, Span[F]])
         }
       }
     }
 
-  def tracingBidiStreaming[F[_]: ConcurrentEffect, Req, Res](
+  def tracingBidiStreaming[F[_]: Async, Req, Res](
       input: Stream[Kleisli[F, Span[F], *], Req],
       descriptor: MethodDescriptor[Req, Res],
       channel: Channel,
+      dispatcher: Dispatcher[F],
       options: CallOptions
   ): Kleisli[F, Span[F], Stream[Kleisli[F, Span[F], *], Res]] =
     Kleisli[F, Span[F], Stream[Kleisli[F, Span[F], *], Res]] { parentSpan =>
@@ -126,11 +137,11 @@ object calls {
         span.kernel.map { kernel =>
           val headers = tracingKernelToHeaders(kernel)
           val streamF: Stream[F, Req] =
-            input.translateInterruptible(Kleisli.applyK[F, Span[F]](span))
+            input.translate(Kleisli.applyK[F, Span[F]](span))
           Stream
-            .eval(Fs2ClientCall[F](channel, descriptor, options))
+            .eval(Fs2ClientCall[F](channel, descriptor, options, dispatcher, errorAdapter))
             .flatMap(_.streamingToStreamingCall(streamF, headers))
-            .translateInterruptible(Kleisli.liftK[F, Span[F]])
+            .translate(Kleisli.liftK[F, Span[F]])
         }
       }
     }

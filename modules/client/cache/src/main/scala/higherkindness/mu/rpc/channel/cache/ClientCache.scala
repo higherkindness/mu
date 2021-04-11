@@ -16,13 +16,13 @@
 
 package higherkindness.mu.rpc.channel.cache
 
-import cats.effect.concurrent.Ref
+import cats.effect.kernel.Ref
 import cats.effect._
 import cats.implicits._
 import fs2.Stream
 import org.log4s.{getLogger, Logger}
 
-import scala.concurrent.duration.{Duration, DurationLong, FiniteDuration, MILLISECONDS}
+import scala.concurrent.duration.{Duration, DurationLong, FiniteDuration}
 
 trait ClientCache[Client[_[_]], F[_]] {
 
@@ -39,11 +39,7 @@ object ClientCache {
       createClient: H => Resource[F, Client[F]],
       tryToRemoveUnusedEvery: FiniteDuration,
       removeUnusedAfter: FiniteDuration
-  )(implicit
-      CE: ConcurrentEffect[F],
-      cs: ContextShift[F],
-      timer: Timer[F]
-  ): Stream[F, ClientCache[Client, F]] =
+  )(implicit f: Async[F]): Stream[F, ClientCache[Client, F]] =
     impl(getKey, (h: H) => createClient(h).allocated, tryToRemoveUnusedEvery, removeUnusedAfter)
 
   def impl[Client[_[_]], F[_], H](
@@ -51,18 +47,14 @@ object ClientCache {
       createClient: H => F[(Client[F], F[Unit])],
       tryToRemoveUnusedEvery: FiniteDuration,
       removeUnusedAfter: FiniteDuration
-  )(implicit
-      CE: ConcurrentEffect[F],
-      cs: ContextShift[F],
-      timer: Timer[F]
-  ): Stream[F, ClientCache[Client, F]] = {
+  )(implicit F: Async[F]): Stream[F, ClientCache[Client, F]] = {
 
     type UnixMillis = Duration
     final case class ClientMeta(client: Client[F], close: F[Unit], lastAccessed: UnixMillis)
     type State = (Map[H, ClientMeta], UnixMillis)
 
     val nowUnix: F[UnixMillis] =
-      timer.clock.realTime(MILLISECONDS).map(_.millis)
+      F.realTime.map(_.toMillis).map(_.millis)
 
     def create(ref: Ref[F, State]): ClientCache[Client, F] =
       new ClientCache[Client, F] {
@@ -75,13 +67,13 @@ object ClientCache {
               .get(key)
               .fold {
                 createClient(key).flatMap { case (client, close) =>
-                  CE.delay(logger.info(s"Created new RPC client for $key")) *>
+                  F.delay(logger.info(s"Created new RPC client for $key")) *>
                     ref
                       .update(_.leftMap(_ + (key -> ClientMeta(client, close, now))))
                       .as(client)
                 }
               }(clientMeta =>
-                CE.delay(logger.debug(s"Reuse existing RPC client for $key")) *>
+                F.delay(logger.debug(s"Reuse existing RPC client for $key")) *>
                   ref
                     .update(_.leftMap(_.updated(key, clientMeta.copy(lastAccessed = now))))
                     .as(clientMeta.client)
@@ -90,10 +82,10 @@ object ClientCache {
           (_, lastClean) <- ref.get
           _ <-
             if (lastClean < (now - tryToRemoveUnusedEvery))
-              Concurrent[F].start(
-                cs.shift *> cleanup(ref, _.lastAccessed < (now - removeUnusedAfter))
+              F.start(
+                cleanup(ref, _.lastAccessed < (now - removeUnusedAfter))
               )
-            else CE.unit
+            else F.unit
         } yield client
       }
 
@@ -106,7 +98,7 @@ object ClientCache {
         }
         noLongerUsed = change.values.toList
         _ <- noLongerUsed.traverse_(_.close)
-        _ <- CE.delay(logger.info(s"Removed ${noLongerUsed.length} RPC clients from cache."))
+        _ <- F.delay(logger.info(s"Removed ${noLongerUsed.length} RPC clients from cache."))
       } yield ()
 
     val refState: F[Ref[F, State]] =

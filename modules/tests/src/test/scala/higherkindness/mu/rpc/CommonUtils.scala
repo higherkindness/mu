@@ -20,6 +20,8 @@ import java.net.ServerSocket
 
 import cats.Functor
 import cats.effect.{Resource, Sync}
+import cats.effect.std.Dispatcher
+import cats.effect.unsafe.implicits.global
 import cats.syntax.functor._
 import higherkindness.mu.rpc.common._
 import higherkindness.mu.rpc.server._
@@ -89,11 +91,14 @@ trait CommonUtils {
     }
 
   def withClient[Client, T](
-      serviceDef: ConcurrentMonad[ServerServiceDefinition],
+      serviceDef: Dispatcher[ConcurrentMonad] => ConcurrentMonad[ServerServiceDefinition],
       resourceBuilder: ConcurrentMonad[ManagedChannel] => Resource[ConcurrentMonad, Client]
-  )(f: Client => T): T =
-    withServerChannel(serviceDef)
-      .flatMap(sc => resourceBuilder(suspendM(sc.channel)))
-      .use(client => suspendM(f(client)))
-      .unsafeRunSync()
+  )(f: Client => T): T = {
+    val makeClientFromServer = for {
+      dispatcher    <- Dispatcher[ConcurrentMonad]
+      serverChannel <- withServerChannel(serviceDef(dispatcher))
+      client        <- resourceBuilder(suspendM(serverChannel.channel))
+    } yield client
+    makeClientFromServer.use(client => suspendM(f(client))).unsafeRunSync()
+  }
 }

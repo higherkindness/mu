@@ -17,6 +17,7 @@
 package higherkindness.mu.rpc.protocol
 
 import cats.Applicative
+import cats.effect.unsafe.implicits.global
 import cats.syntax.applicative._
 import higherkindness.mu.rpc.common._
 import higherkindness.mu.rpc.protocol.Utils._
@@ -57,7 +58,6 @@ class RPCMethodNameTests extends RpcBaseTestSuite with BeforeAndAfterAll with Ch
   "A RPC server" should {
 
     import RPCService._
-    import higherkindness.mu.rpc.TestsImplicits._
 
     implicit val H: RPCServiceDefImpl[ConcurrentMonad] = new RPCServiceDefImpl[ConcurrentMonad]
 

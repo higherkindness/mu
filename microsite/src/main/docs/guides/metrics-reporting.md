@@ -27,11 +27,6 @@ In order to monitor the RPC calls on the server side we need two things:
 Let's see how to register server metrics using `Prometheus` in the following fragment.
 
 ```scala mdoc:invisible
-val EC: scala.concurrent.ExecutionContext = scala.concurrent.ExecutionContext.Implicits.global
-
-implicit val timer: cats.effect.Timer[cats.effect.IO]     = cats.effect.IO.timer(EC)
-implicit val cs: cats.effect.ContextShift[cats.effect.IO] = cats.effect.IO.contextShift(EC)
-
 import higherkindness.mu.rpc.protocol._
 
 object service {
@@ -59,7 +54,8 @@ class ServiceHandler[F[_]: Applicative] extends Greeter[F] {
 ```
 
 ```scala mdoc:silent
-import cats.effect.IO
+import cats.effect.{IO, Resource}
+import cats.effect.std.Dispatcher
 import higherkindness.mu.rpc.prometheus.PrometheusMetrics
 import higherkindness.mu.rpc.server._
 import higherkindness.mu.rpc.server.interceptors.implicits._
@@ -73,11 +69,13 @@ object InterceptingServerCalls {
 
   implicit val greeterServiceHandler: ServiceHandler[IO] = new ServiceHandler[IO]
 
-  val server: IO[GrpcServer[IO]] = for {
-    metricsOps  <- PrometheusMetrics.build[IO](cr, "server")
-    service     <- Greeter.bindService[IO]
-    withMetrics = service.interceptWith(MetricsServerInterceptor(metricsOps))
-    server      <- GrpcServer.default[IO](8080, List(AddService(withMetrics)))
+  val server: Resource[IO, GrpcServer[IO]] = for {
+    metricsOps  <- Resource.eval(PrometheusMetrics.build[IO](cr, "server"))
+    dispatcher  <- Dispatcher[IO] 
+    service     <- Resource.eval(Greeter.bindService[IO](dispatcher))
+    interceptor <- MetricsServerInterceptor(metricsOps)
+    withMetrics = service.interceptWith(interceptor)
+    server      <- Resource.eval(GrpcServer.default[IO](8080, List(AddService(withMetrics))))
   } yield server
 
 }
@@ -103,11 +101,12 @@ object InterceptingClientCalls {
 
   val serviceClient: Resource[IO, Greeter[IO]] =
     for {
-      channelFor    <- Resource.liftF(ConfigForAddress[IO]("rpc.host", "rpc.port"))
-      metricsOps    <- Resource.liftF(PrometheusMetrics.build[IO](cr, "client"))
+      channelFor    <- Resource.eval(ConfigForAddress[IO]("rpc.host", "rpc.port"))
+      metricsOps    <- Resource.eval(PrometheusMetrics.build[IO](cr, "client"))
+      interceptor   <- MetricsChannelInterceptor(metricsOps)
       serviceClient <- Greeter.client[IO](
         channelFor = channelFor,
-        channelConfigList = List(UsePlaintext(), AddInterceptor(MetricsChannelInterceptor(metricsOps))))
+        channelConfigList = List(UsePlaintext(), AddInterceptor(interceptor)))
     } yield serviceClient
 
 }

@@ -52,7 +52,7 @@ option" when constructing the client.
 Here is an example of a client with request compression enabled.
 
 ```scala mdoc:silent
-import cats.effect.{ConcurrentEffect, ContextShift, Resource}
+import cats.effect.{Async, Resource}
 import higherkindness.mu.rpc._
 import io.grpc.CallOptions
 import CompressionExample._
@@ -61,7 +61,7 @@ object CompressionExampleClient {
 
   val channelFor: ChannelFor = ChannelForAddress("localhost", 12345)
 
-  def clientResource[F[_]: ConcurrentEffect: ContextShift]: Resource[F, Greeter[F]] =
+  def clientResource[F[_]: Async]: Resource[F, Greeter[F]] =
     Greeter.client[F](channelFor, options = CallOptions.DEFAULT.withCompression("gzip"))
 }
 ```

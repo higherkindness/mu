@@ -18,6 +18,7 @@ package higherkindness.mu.rpc
 package ssl
 
 import cats.effect.{IO, Resource}
+import cats.effect.unsafe.implicits.global
 import higherkindness.mu.rpc.channel.OverrideAuthority
 import higherkindness.mu.rpc.channel.netty.{
   NettyChannelInterpreter,
@@ -33,7 +34,6 @@ import org.scalatest._
 
 class RPCTests extends RpcBaseTestSuite with BeforeAndAfterAll {
 
-  import TestsImplicits._
   import higherkindness.mu.rpc.ssl.Utils._
   import higherkindness.mu.rpc.ssl.Utils.database._
   import higherkindness.mu.rpc.ssl.Utils.service._

@@ -16,14 +16,11 @@
 
 package higherkindness.mu.rpc.config.server
 
+import cats.effect.unsafe.implicits.global
 import higherkindness.mu.rpc.common.{ConcurrentMonad, SC}
 import higherkindness.mu.rpc.server._
 
-import scala.concurrent.ExecutionContext
-
 class ServerConfigTests extends RpcServerTestSuite {
-
-  val ec: ExecutionContext = ExecutionContext.Implicits.global
 
   "ServerConfig" should {
 

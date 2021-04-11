@@ -21,14 +21,14 @@ import cats.syntax.applicative._
 import cats.syntax.flatMap._
 import cats.syntax.functor._
 import cats.effect.{Async, IO, Resource}
-import cats.effect.concurrent.Ref
+import cats.effect.kernel.Ref
 import cats.instances.int._
-import fs2.Stream
+import fs2.{Compiler, Stream}
 import higherkindness.mu.rpc._
 import higherkindness.mu.rpc.server._
 import io.grpc.ServerServiceDefinition
-import monix.reactive.Observable
-import monix.execution.Scheduler
+// import monix.reactive.Observable
+// import monix.execution.Scheduler
 import natchez._
 import org.scalatest.funspec.AnyFunSpec
 import scala.util.Random
@@ -55,18 +55,18 @@ class RPCTracingTests extends AnyFunSpec {
       def fs2BidiStreaming(req: Stream[F, Request]): F[Stream[F, Response]]
     }
 
-    @service(Protobuf, namespace = Some("com.foo"))
-    trait MonixServiceDef[F[_]] {
-      def monixClientStreaming(req: Observable[Request]): F[Response]
-      def monixServerStreaming(req: Request): F[Observable[Response]]
-      def monixBidiStreaming(req: Observable[Request]): F[Observable[Response]]
-    }
+    // @service(Protobuf, namespace = Some("com.foo"))
+    // trait MonixServiceDef[F[_]] {
+    //   def monixClientStreaming(req: Observable[Request]): F[Response]
+    //   def monixServerStreaming(req: Request): F[Observable[Response]]
+    //   def monixBidiStreaming(req: Observable[Request]): F[Observable[Response]]
+    // }
 
     class TracingServiceDef[F[_]: Async: Trace](s: Scheduler)(implicit
-        c: Stream.Compiler[F, F]
+        c: Compiler[F, F]
     ) extends UnaryServiceDef[F]
-        with FS2ServiceDef[F]
-        with MonixServiceDef[F] {
+        with FS2ServiceDef[F] {
+        // with MonixServiceDef[F] {
 
       implicit val scheduler: Scheduler = s
 
@@ -84,14 +84,14 @@ class RPCTracingTests extends AnyFunSpec {
       def fs2BidiStreaming(req: Stream[F, Request]): F[Stream[F, Response]] =
         req.map(r => Response(r.s.length)).pure[F]
 
-      def monixClientStreaming(req: Observable[Request]): F[Response] =
-        req.map(_.s.length).foldL.map(Response(_)).toAsync[F]
+      // def monixClientStreaming(req: Observable[Request]): F[Response] =
+      //   req.map(_.s.length).foldL.map(Response(_)).toAsync[F]
 
-      def monixServerStreaming(req: Request): F[Observable[Response]] =
-        Observable(Response(req.s.length)).pure[F]
+      // def monixServerStreaming(req: Request): F[Observable[Response]] =
+      //   Observable(Response(req.s.length)).pure[F]
 
-      def monixBidiStreaming(req: Observable[Request]): F[Observable[Response]] =
-        req.map(r => Response(r.s.length)).pure[F]
+      // def monixBidiStreaming(req: Observable[Request]): F[Observable[Response]] =
+      //   req.map(r => Response(r.s.length)).pure[F]
 
     }
 
@@ -284,6 +284,7 @@ class RPCTracingTests extends AnyFunSpec {
 
     }
 
+    /*
     describe("Monix streaming endpoints") {
 
       implicit val scheduler: Scheduler = Scheduler(EC)
@@ -380,7 +381,7 @@ class RPCTracingTests extends AnyFunSpec {
       }
 
     }
-
+    */
   }
 
 }

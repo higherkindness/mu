@@ -24,7 +24,7 @@ import weather._
 import weather.RainEvent.EventType._
 import higherkindness.mu.rpc.protocol.Empty
 import fs2._
-import fs2.Stream.Compiler
+import fs2.Compiler
 
 class MyWeatherService[F[_]: Applicative](implicit compiler: Compiler[F, F])
     extends WeatherService[F] {

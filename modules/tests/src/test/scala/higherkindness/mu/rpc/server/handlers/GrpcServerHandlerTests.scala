@@ -17,16 +17,14 @@
 package higherkindness.mu.rpc
 package server.handlers
 
+import cats.effect.unsafe.implicits.global
 import higherkindness.mu.rpc.common.{ConcurrentMonad, SC}
 import higherkindness.mu.rpc.server.RpcServerTestSuite
 import io.grpc.{Server, ServerServiceDefinition}
 
-import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.TimeUnit
 
 class GrpcServerHandlerTests extends RpcServerTestSuite {
-
-  val executionContext: ExecutionContext = ExecutionContext.Implicits.global
 
   import implicits._
 

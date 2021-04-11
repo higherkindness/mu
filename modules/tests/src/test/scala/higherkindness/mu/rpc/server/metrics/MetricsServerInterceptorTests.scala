@@ -17,8 +17,9 @@
 package higherkindness.mu.rpc.server.metrics
 
 import cats.effect.{IO, Resource}
+import cats.effect.std.Dispatcher
+import cats.effect.unsafe.implicits.global
 import higherkindness.mu.rpc.common.{A => _, _}
-import higherkindness.mu.rpc.common.util.FakeClock
 import higherkindness.mu.rpc.internal.interceptors.GrpcMethodInfo
 import higherkindness.mu.rpc.internal.metrics.{MetricsOps, MetricsOpsRegister}
 import higherkindness.mu.rpc.protocol._
@@ -39,8 +40,7 @@ class MetricsServerInterceptorTests extends RpcBaseTestSuite {
     "generate the right metrics with proto" in {
       (for {
         metricsOps <- MetricsOpsRegister.build
-        clock      <- FakeClock.build[IO]()
-        _          <- makeProtoCalls(metricsOps)(_.serviceOp1(Request()))(protoRPCServiceImpl, clock)
+        _          <- makeProtoCalls(metricsOps)(_.serviceOp1(Request()))(protoRPCServiceImpl)
         assertion  <- checkCalls(metricsOps, List(serviceOp1Info))
       } yield assertion).unsafeRunSync()
     }
@@ -48,10 +48,9 @@ class MetricsServerInterceptorTests extends RpcBaseTestSuite {
     "generate the right metrics when calling multiple methods with proto" in {
       (for {
         metricsOps <- MetricsOpsRegister.build
-        clock      <- FakeClock.build[IO]()
         _ <- makeProtoCalls(metricsOps) { client =>
           client.serviceOp1(Request()) *> client.serviceOp2(Request())
-        }(protoRPCServiceImpl, clock)
+        }(protoRPCServiceImpl)
         assertion <- checkCalls(metricsOps, List(serviceOp1Info, serviceOp2Info))
       } yield assertion).unsafeRunSync()
     }
@@ -59,8 +58,7 @@ class MetricsServerInterceptorTests extends RpcBaseTestSuite {
     "generate the right metrics with proto when the server returns an error" in {
       (for {
         metricsOps <- MetricsOpsRegister.build
-        clock      <- FakeClock.build[IO]()
-        _          <- makeProtoCalls(metricsOps)(_.serviceOp1(Request()))(protoRPCServiceErrorImpl, clock)
+        _          <- makeProtoCalls(metricsOps)(_.serviceOp1(Request()))(protoRPCServiceErrorImpl)
         assertion  <- checkCalls(metricsOps, List(serviceOp1Info), serverError = true)
       } yield assertion).unsafeRunSync()
     }
@@ -69,13 +67,17 @@ class MetricsServerInterceptorTests extends RpcBaseTestSuite {
 
   private[this] def makeProtoCalls[A](metricsOps: MetricsOps[IO])(
       f: ProtoRPCService[IO] => IO[A]
-  )(implicit H: ProtoRPCService[IO], clock: FakeClock[IO]): IO[Either[Throwable, A]] = {
-    withServerChannel[IO](
-      service = ProtoRPCService
-        .bindService[IO]
-        .map(_.interceptWith(MetricsServerInterceptor(metricsOps, myClassifier)))
-    ).flatMap(createClient)
-      .use(f(_).attempt)
+  )(implicit H: ProtoRPCService[IO]): IO[Either[Throwable, A]] = {
+    (for {
+      dispatcher  <- Dispatcher[IO]
+      interceptor <- MetricsServerInterceptor(metricsOps, myClassifier)
+      serverChannel <- withServerChannel[IO](
+        service = ProtoRPCService
+          .bindService[IO](dispatcher)
+          .map(_.interceptWith(interceptor))
+      )
+      client <- createClient(serverChannel)
+    } yield client).use(f(_).attempt)
   }
 
   private[this] def checkCalls(
@@ -115,12 +117,6 @@ class MetricsServerInterceptorTests extends RpcBaseTestSuite {
 }
 
 object services {
-
-  val EC: scala.concurrent.ExecutionContext =
-    scala.concurrent.ExecutionContext.Implicits.global
-
-  implicit val timer: cats.effect.Timer[cats.effect.IO]     = cats.effect.IO.timer(EC)
-  implicit val cs: cats.effect.ContextShift[cats.effect.IO] = cats.effect.IO.contextShift(EC)
 
   final case class Request()
   final case class Response()

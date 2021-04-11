@@ -18,30 +18,25 @@ package higherkindness.mu.rpc.benchmarks
 package shared
 
 import cats.effect._
+import cats.effect.std.Dispatcher
+import cats.effect.unsafe.implicits.global
 import cats.instances.list._
 import cats.syntax.traverse._
 import higherkindness.mu.rpc._
-import higherkindness.mu.rpc.channel.ManagedChannelInterpreter
+import higherkindness.mu.rpc.channel.{ManagedChannelInterpreter, UsePlaintext}
 import higherkindness.mu.rpc.benchmarks.shared.protocols._
 import higherkindness.mu.rpc.benchmarks.shared.server._
 import higherkindness.mu.rpc.server._
-
-import scala.concurrent.ExecutionContext
-import io.chrisdavenport.log4cats.Logger
-import io.chrisdavenport.log4cats.slf4j.Slf4jLogger
-import java.util.concurrent.TimeUnit
 import io.grpc.ManagedChannel
-import higherkindness.mu.rpc.channel.UsePlaintext
+import java.util.concurrent.TimeUnit
+import org.typelevel.log4cats.Logger
+import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 trait ServerRuntime {
 
   val grpcPort: Int = 12345
 
-  val EC: ExecutionContext = ExecutionContext.Implicits.global
-
-  implicit val logger: Logger[IO]        = Slf4jLogger.getLogger[IO]
-  implicit lazy val timer: Timer[IO]     = IO.timer(EC)
-  implicit lazy val cs: ContextShift[IO] = IO.contextShift(EC)
+  implicit val logger: Logger[IO] = Slf4jLogger.getLogger[IO]
 
   implicit val persistenceService: PersistenceService[IO] = PersistenceService[IO]
 
@@ -50,10 +45,12 @@ trait ServerRuntime {
   implicit private val avroWithSchemaHandler: AvroWithSchemaHandler[IO] =
     new AvroWithSchemaHandler[IO]
 
+  private val (dispatcher, closeDispatcher) = Dispatcher[IO].allocated.unsafeRunSync()
+
   implicit lazy val grpcConfigs: IO[List[GrpcConfig]] = List(
-    PersonServicePB.bindService[IO].map(AddService),
-    PersonServiceAvro.bindService[IO].map(AddService),
-    PersonServiceAvroWithSchema.bindService[IO].map(AddService)
+    PersonServicePB.bindService[IO](dispatcher).map(AddService),
+    PersonServiceAvro.bindService[IO](dispatcher).map(AddService),
+    PersonServiceAvroWithSchema.bindService[IO](dispatcher).map(AddService)
   ).sequence[IO, GrpcConfig]
 
   implicit lazy val clientChannel =
@@ -81,6 +78,7 @@ trait ServerRuntime {
       _ <- logger.info("Stopping server..")
       _ <- server.shutdownNow()
       _ <- server.awaitTerminationTimeout(1, TimeUnit.SECONDS)
+      _ <- closeDispatcher
       _ <- logger.info("Server Stopped..")
     } yield ()).unsafeRunSync()
 }

@@ -17,7 +17,7 @@
 package higherkindness.mu.rpc.protocol
 
 import cats.effect.{IO, Resource}
-import cats.effect.concurrent.Ref
+import cats.effect.kernel.Ref
 import cats.syntax.applicativeError._
 import natchez._
 

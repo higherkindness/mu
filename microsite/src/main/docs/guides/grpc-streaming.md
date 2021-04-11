@@ -61,7 +61,7 @@ We'll write the service definition using both Monix and FS2 so we can compare.
 
 ### Using Monix Observable
 
-```scala mdoc:silent
+```
 object MonixService {
 
   import monix.reactive.Observable

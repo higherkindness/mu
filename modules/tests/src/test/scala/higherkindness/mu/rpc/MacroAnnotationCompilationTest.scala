@@ -18,7 +18,7 @@ package higherkindness.mu.rpc
 
 import higherkindness.mu.rpc.protocol._
 import _root_.fs2.Stream
-import monix.reactive.Observable
+// import monix.reactive.Observable
 
 // This is not a normal "test" with assertions.
 // It's just a check that valid code compiles as expected
@@ -45,21 +45,21 @@ object MacroAnnotationCompilationTest {
 
   }
 
-  @service(Protobuf)
-  trait MyMonixService[F[_]] {
+  // @service(Protobuf)
+  // trait MyMonixService[F[_]] {
 
-    def trivial(req: Empty.type): F[Empty.type]
+  //   def trivial(req: Empty.type): F[Empty.type]
 
-    def unary(req: MyReq): F[MyResp]
+  //   def unary(req: MyReq): F[MyResp]
 
-    def clientStreaming(req: Observable[MyReq]): F[MyResp]
+  //   def clientStreaming(req: Observable[MyReq]): F[MyResp]
 
-    def clientStreamingFullyQualifiedStream(req: Observable[MyReq]): F[MyResp]
+  //   def clientStreamingFullyQualifiedStream(req: Observable[MyReq]): F[MyResp]
 
-    def serverStreaming(req: MyReq): F[Observable[MyResp]]
+  //   def serverStreaming(req: MyReq): F[Observable[MyResp]]
 
-    def bidirectionalStreaming(req: Observable[MyReq]): F[Observable[MyResp]]
+  //   def bidirectionalStreaming(req: Observable[MyReq]): F[Observable[MyResp]]
 
-  }
+  // }
 
 }

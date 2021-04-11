@@ -19,7 +19,7 @@ package avro
 
 import higherkindness.mu.rpc.common.{A => _, _}
 import higherkindness.mu.rpc.protocol._
-import cats.effect.{ConcurrentEffect, Effect, Resource}
+import cats.effect.{Async, Resource, Sync}
 import shapeless.{:+:, CNil, Coproduct}
 
 object Utils extends CommonUtils {
@@ -210,124 +210,123 @@ object Utils extends CommonUtils {
 
   object handlers {
 
-    class RPCServiceHandler[F[_]: ConcurrentEffect] extends service.RPCService[F] {
-      def get(a: Request): F[Response] = Effect[F].delay(response)
+    class RPCServiceHandler[F[_]: Async] extends service.RPCService[F] {
+      def get(a: Request): F[Response] = Sync[F].delay(response)
       def getCoproduct(a: RequestCoproduct[Request]): F[ResponseCoproduct[Response]] =
-        Effect[F].delay(
+        Sync[F].delay(
           ResponseCoproduct(Coproduct[Int :+: String :+: Response :+: CNil](response))
         )
     }
 
-    class RequestAddedBooleanRPCServiceHandler[F[_]: ConcurrentEffect]
+    class RequestAddedBooleanRPCServiceHandler[F[_]: Async]
         extends serviceRequestAddedBoolean.RPCService[F] {
-      def get(a: RequestAddedBoolean): F[Response] = Effect[F].delay(response)
+      def get(a: RequestAddedBoolean): F[Response] = Sync[F].delay(response)
       def getCoproduct(a: RequestCoproduct[RequestAddedBoolean]): F[ResponseCoproduct[Response]] =
-        Effect[F].delay(responseCoproduct(response))
+        Sync[F].delay(responseCoproduct(response))
     }
 
-    class RequestAddedOptionalBooleanRPCServiceHandler[F[_]: ConcurrentEffect]
+    class RequestAddedOptionalBooleanRPCServiceHandler[F[_]: Async]
         extends serviceRequestAddedOptionalBoolean.RPCService[F] {
-      def get(a: RequestAddedOptionalBoolean): F[Response] = Effect[F].delay(response)
+      def get(a: RequestAddedOptionalBoolean): F[Response] = Sync[F].delay(response)
       def getCoproduct(
           a: RequestCoproduct[RequestAddedOptionalBoolean]
       ): F[ResponseCoproduct[Response]] =
-        Effect[F].delay(responseCoproduct(response))
+        Sync[F].delay(responseCoproduct(response))
     }
 
-    class RequestAddedCoproductItemRPCServiceHandler[F[_]: ConcurrentEffect]
+    class RequestAddedCoproductItemRPCServiceHandler[F[_]: Async]
         extends serviceRequestAddedCoproductItem.RPCService[F] {
       def getCoproduct(a: RequestSuperCoproduct[Request]): F[ResponseCoproduct[Response]] =
-        Effect[F].delay(responseCoproduct(response))
+        Sync[F].delay(responseCoproduct(response))
     }
 
-    class RequestRemovedCoproductItemRPCServiceHandler[F[_]: ConcurrentEffect]
+    class RequestRemovedCoproductItemRPCServiceHandler[F[_]: Async]
         extends serviceRequestRemovedCoproductItem.RPCService[F] {
       def getCoproduct(a: RequestCoproductNoInt[Request]): F[ResponseCoproduct[Response]] =
-        Effect[F].delay(responseCoproduct(response))
+        Sync[F].delay(responseCoproduct(response))
     }
 
-    class RequestReplacedCoproductItemRPCServiceHandler[F[_]: ConcurrentEffect]
+    class RequestReplacedCoproductItemRPCServiceHandler[F[_]: Async]
         extends serviceRequestReplacedCoproductItem.RPCService[F] {
       def getCoproduct(a: RequestCoproductReplaced[Request]): F[ResponseCoproduct[Response]] =
-        Effect[F].delay(responseCoproduct(response))
+        Sync[F].delay(responseCoproduct(response))
     }
 
-    class RequestDroppedFieldRPCServiceHandler[F[_]: ConcurrentEffect]
+    class RequestDroppedFieldRPCServiceHandler[F[_]: Async]
         extends serviceRequestDroppedField.RPCService[F] {
-      def get(a: RequestDroppedField): F[Response] = Effect[F].delay(response)
+      def get(a: RequestDroppedField): F[Response] = Sync[F].delay(response)
       def getCoproduct(a: RequestCoproduct[RequestDroppedField]): F[ResponseCoproduct[Response]] =
-        Effect[F].delay(responseCoproduct(response))
+        Sync[F].delay(responseCoproduct(response))
     }
 
-    class RequestReplacedTypeRPCServiceHandler[F[_]: ConcurrentEffect]
+    class RequestReplacedTypeRPCServiceHandler[F[_]: Async]
         extends serviceRequestReplacedType.RPCService[F] {
-      def get(a: RequestReplacedType): F[Response] = Effect[F].delay(response)
+      def get(a: RequestReplacedType): F[Response] = Sync[F].delay(response)
       def getCoproduct(a: RequestCoproduct[RequestReplacedType]): F[ResponseCoproduct[Response]] =
-        Effect[F].delay(responseCoproduct(response))
+        Sync[F].delay(responseCoproduct(response))
     }
 
-    class RequestRenamedFieldRPCServiceHandler[F[_]: ConcurrentEffect]
+    class RequestRenamedFieldRPCServiceHandler[F[_]: Async]
         extends serviceRequestRenamedField.RPCService[F] {
-      def get(a: RequestRenamedField): F[Response] = Effect[F].delay(response)
+      def get(a: RequestRenamedField): F[Response] = Sync[F].delay(response)
       def getCoproduct(a: RequestCoproduct[RequestRenamedField]): F[ResponseCoproduct[Response]] =
-        Effect[F].delay(responseCoproduct(response))
+        Sync[F].delay(responseCoproduct(response))
     }
 
-    class ResponseAddedBooleanRPCServiceHandler[F[_]: ConcurrentEffect]
+    class ResponseAddedBooleanRPCServiceHandler[F[_]: Async]
         extends serviceResponseAddedBoolean.RPCService[F] {
-      def get(a: Request): F[ResponseAddedBoolean] = Effect[F].delay(responseAddedBoolean)
+      def get(a: Request): F[ResponseAddedBoolean] = Sync[F].delay(responseAddedBoolean)
       def getCoproduct(a: RequestCoproduct[Request]): F[ResponseCoproduct[ResponseAddedBoolean]] =
-        Effect[F].delay(responseCoproduct(responseAddedBoolean))
+        Sync[F].delay(responseCoproduct(responseAddedBoolean))
     }
 
-    class ResponseAddedBooleanCoproductRPCServiceHandler[F[_]: ConcurrentEffect]
+    class ResponseAddedBooleanCoproductRPCServiceHandler[F[_]: Async]
         extends serviceResponseAddedBooleanCoproduct.RPCService[F] {
       def getCoproduct(a: RequestCoproduct[Request]): F[ResponseSuperCoproduct[Response]] =
-        Effect[F].delay(
+        Sync[F].delay(
           ResponseSuperCoproduct(
             b = Coproduct[Int :+: String :+: Boolean :+: Response :+: CNil](true)
           )
         )
     }
 
-    class ResponseRemovedIntCoproductRPCServiceHandler[F[_]: ConcurrentEffect]
+    class ResponseRemovedIntCoproductRPCServiceHandler[F[_]: Async]
         extends serviceResponseRemovedIntCoproduct.RPCService[F] {
       def getCoproduct(a: RequestCoproduct[Request]): F[ResponseCoproductNoInt[Response]] =
-        Effect[F].delay(responseCoproductNoInt(response))
+        Sync[F].delay(responseCoproductNoInt(response))
     }
 
-    class ResponseReplacedCoproductRPCServiceHandler[F[_]: ConcurrentEffect]
+    class ResponseReplacedCoproductRPCServiceHandler[F[_]: Async]
         extends serviceResponseReplacedCoproduct.RPCService[F] {
       def getCoproduct(a: RequestCoproduct[Request]): F[ResponseCoproductReplaced[Response]] =
-        Effect[F].delay(responseCoproductReplaced(response))
+        Sync[F].delay(responseCoproductReplaced(response))
     }
 
-    class ResponseReplacedTypeRPCServiceHandler[F[_]: ConcurrentEffect]
+    class ResponseReplacedTypeRPCServiceHandler[F[_]: Async]
         extends serviceResponseReplacedType.RPCService[F] {
-      def get(a: Request): F[ResponseReplacedType] = Effect[F].delay(responseReplacedType)
+      def get(a: Request): F[ResponseReplacedType] = Sync[F].delay(responseReplacedType)
       def getCoproduct(a: RequestCoproduct[Request]): F[ResponseCoproduct[ResponseReplacedType]] =
-        Effect[F].delay(responseCoproduct(responseReplacedType))
+        Sync[F].delay(responseCoproduct(responseReplacedType))
     }
 
-    class ResponseRenamedFieldRPCServiceHandler[F[_]: ConcurrentEffect]
+    class ResponseRenamedFieldRPCServiceHandler[F[_]: Async]
         extends serviceResponseRenamedField.RPCService[F] {
-      def get(a: Request): F[ResponseRenamedField] = Effect[F].delay(responseRenamedField)
+      def get(a: Request): F[ResponseRenamedField] = Sync[F].delay(responseRenamedField)
       def getCoproduct(a: RequestCoproduct[Request]): F[ResponseCoproduct[ResponseRenamedField]] =
-        Effect[F].delay(responseCoproduct(responseRenamedField))
+        Sync[F].delay(responseCoproduct(responseRenamedField))
     }
 
-    class ResponseDroppedFieldRPCServiceHandler[F[_]: ConcurrentEffect]
+    class ResponseDroppedFieldRPCServiceHandler[F[_]: Async]
         extends serviceResponseDroppedField.RPCService[F] {
-      def get(a: Request): F[ResponseDroppedField] = Effect[F].delay(responseDroppedField)
+      def get(a: Request): F[ResponseDroppedField] = Sync[F].delay(responseDroppedField)
       def getCoproduct(a: RequestCoproduct[Request]): F[ResponseCoproduct[ResponseDroppedField]] =
-        Effect[F].delay(responseCoproduct(responseDroppedField))
+        Sync[F].delay(responseCoproduct(responseDroppedField))
     }
 
   }
 
   trait MuRuntime {
 
-    import TestsImplicits._
     import handlers._
 
     //////////////////////////////////

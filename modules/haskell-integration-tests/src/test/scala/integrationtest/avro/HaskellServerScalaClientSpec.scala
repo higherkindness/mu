@@ -23,18 +23,15 @@ import higherkindness.mu.rpc._
 import higherkindness.mu.rpc.protocol.Empty
 
 import io.grpc.CallOptions
-import cats.effect.{ContextShift, IO, Resource}
+import cats.effect.{IO, Resource}
+import cats.effect.unsafe.implicits.global
 
 import org.scalatest.flatspec.AnyFlatSpec
-
-import scala.concurrent.ExecutionContext
 
 class HaskellServerScalaClientSpec extends AnyFlatSpec with HaskellServerRunningInDocker {
 
   def serverPort: Int              = Constants.AvroPort
   def serverExecutableName: String = "avro-server"
-
-  implicit val CS: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
 
   val channelFor: ChannelFor = ChannelForAddress("localhost", serverPort)
 

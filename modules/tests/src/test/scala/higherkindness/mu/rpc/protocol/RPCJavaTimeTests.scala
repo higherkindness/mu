@@ -20,6 +20,7 @@ package protocol
 import java.time._
 
 import cats.Applicative
+import cats.effect.unsafe.implicits.global
 import cats.syntax.applicative._
 import com.fortysevendeg.scalacheck.datetime.instances.jdk8._
 import com.fortysevendeg.scalacheck.datetime.GenDateTime._
@@ -98,7 +99,6 @@ class RPCJavaTimeTests extends RpcBaseTestSuite with BeforeAndAfterAll with Chec
 
   "A RPC server" should {
 
-    import TestsImplicits._
     import RPCDateService._
 
     implicit val H: RPCDateServiceDefImpl[ConcurrentMonad] =

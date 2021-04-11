@@ -16,6 +16,7 @@
 
 package higherkindness.mu.rpc.config.channel
 
+import cats.effect.unsafe.implicits.global
 import higherkindness.mu.rpc.channel.RpcClientTestSuite
 import higherkindness.mu.rpc.common.{ConcurrentMonad, SC}
 import higherkindness.mu.rpc.{ChannelForAddress, ChannelForTarget}

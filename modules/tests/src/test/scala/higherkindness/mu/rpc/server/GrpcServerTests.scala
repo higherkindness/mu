@@ -20,6 +20,7 @@ package server
 import java.util.concurrent.TimeUnit
 
 import cats.Apply
+import cats.effect.unsafe.implicits.global
 import cats.syntax.apply._
 import higherkindness.mu.rpc.common.{ConcurrentMonad, SC}
 import io.grpc.{Server, ServerServiceDefinition}
