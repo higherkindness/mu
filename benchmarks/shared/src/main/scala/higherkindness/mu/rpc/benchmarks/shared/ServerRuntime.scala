@@ -32,6 +32,7 @@ import org.typelevel.log4cats.slf4j.Slf4jLogger
 import java.util.concurrent.TimeUnit
 import io.grpc.ManagedChannel
 import higherkindness.mu.rpc.channel.UsePlaintext
+import cats.effect.Temporal
 
 trait ServerRuntime {
 
@@ -40,7 +41,7 @@ trait ServerRuntime {
   val EC: ExecutionContext = ExecutionContext.Implicits.global
 
   implicit val logger: Logger[IO]        = Slf4jLogger.getLogger[IO]
-  implicit lazy val timer: Timer[IO]     = IO.timer(EC)
+  implicit lazy val timer: Temporal[IO]  = IO.timer(EC)
   implicit lazy val cs: ContextShift[IO] = IO.contextShift(EC)
 
   implicit val persistenceService: PersistenceService[IO] = PersistenceService[IO]

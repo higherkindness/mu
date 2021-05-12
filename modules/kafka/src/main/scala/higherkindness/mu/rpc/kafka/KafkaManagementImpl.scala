@@ -16,7 +16,7 @@
 
 package higherkindness.mu.rpc.kafka
 
-import cats.effect.{Concurrent, ContextShift}
+import cats.effect.Concurrent
 import cats.implicits._
 import fs2.kafka._
 import higherkindness.mu.rpc.protocol.Empty

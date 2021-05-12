@@ -16,13 +16,13 @@
 
 package higherkindness.mu.rpc.channel.cache
 
-import cats.effect.concurrent.Ref
 import cats.effect._
 import cats.implicits._
 import fs2.Stream
 import org.log4s.{getLogger, Logger}
 
 import scala.concurrent.duration.{Duration, DurationLong, FiniteDuration, MILLISECONDS}
+import cats.effect.{Ref, Spawn, Temporal}
 
 trait ClientCache[Client[_[_]], F[_]] {
 
@@ -41,8 +41,7 @@ object ClientCache {
       removeUnusedAfter: FiniteDuration
   )(implicit
       CE: ConcurrentEffect[F],
-      cs: ContextShift[F],
-      timer: Timer[F]
+      timer: Temporal[F]
   ): Stream[F, ClientCache[Client, F]] =
     impl(getKey, (h: H) => createClient(h).allocated, tryToRemoveUnusedEvery, removeUnusedAfter)
 
@@ -53,8 +52,7 @@ object ClientCache {
       removeUnusedAfter: FiniteDuration
   )(implicit
       CE: ConcurrentEffect[F],
-      cs: ContextShift[F],
-      timer: Timer[F]
+      timer: Temporal[F]
   ): Stream[F, ClientCache[Client, F]] = {
 
     type UnixMillis = Duration
@@ -91,7 +89,7 @@ object ClientCache {
           _ <-
             if (lastClean < (now - tryToRemoveUnusedEvery))
               Concurrent[F].start(
-                cs.shift *> cleanup(ref, _.lastAccessed < (now - removeUnusedAfter))
+                Spawn[F].cede *> cleanup(ref, _.lastAccessed < (now - removeUnusedAfter))
               )
             else CE.unit
         } yield client

@@ -16,20 +16,20 @@
 
 package higherkindness.mu.kafka
 
-import cats.effect.{ConcurrentEffect, ContextShift, Sync, Timer}
+import cats.effect.{ConcurrentEffect, Sync}
 import fs2.Stream
 import fs2.kafka.{ConsumerSettings, KafkaConsumer}
 import higherkindness.mu.format.Deserialiser
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
+import cats.effect.Temporal
 
 object ConsumerStream {
 
   def apply[F[_]: Sync, A](topic: String, settings: ConsumerSettings[F, String, Array[Byte]])(
       implicit
-      contextShift: ContextShift[F],
       concurrentEffect: ConcurrentEffect[F],
-      timer: Timer[F],
+      timer: Temporal[F],
       decoder: Deserialiser[A]
   ): Stream[F, A] =
     for {

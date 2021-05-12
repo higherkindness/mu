@@ -18,10 +18,10 @@ package higherkindness.mu.rpc.healthcheck.unary.handler
 
 import cats.Functor
 import cats.effect.Sync
-import cats.effect.concurrent.Ref
 import cats.implicits._
 import higherkindness.mu.rpc.healthcheck.unary.serviceUnary.HealthCheckServiceUnary
 import higherkindness.mu.rpc.protocol.Empty
+import cats.effect.Ref
 
 object HealthService {
 

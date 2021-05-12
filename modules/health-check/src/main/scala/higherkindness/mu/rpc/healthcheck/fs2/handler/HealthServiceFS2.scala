@@ -17,13 +17,13 @@
 package higherkindness.mu.rpc.healthcheck.fs2.handler
 
 import cats.effect.{Concurrent, Sync}
-import cats.effect.concurrent.Ref
 import higherkindness.mu.rpc.healthcheck.ordering._
 import cats.implicits._
 import fs2.Stream
 import fs2.concurrent.Topic
 import higherkindness.mu.rpc.healthcheck.fs2.serviceFS2.HealthCheckServiceFS2
 import higherkindness.mu.rpc.healthcheck.unary.handler._
+import cats.effect.Ref
 
 object HealthServiceFS2 {
 

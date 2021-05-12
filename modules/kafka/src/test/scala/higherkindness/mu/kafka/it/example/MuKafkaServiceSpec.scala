@@ -16,7 +16,7 @@
 
 package higherkindness.mu.kafka.it.example
 
-import cats.effect.{ContextShift, IO, Timer}
+import cats.effect.IO
 import com.typesafe.scalalogging.LazyLogging
 import fs2.{Pipe, Stream}
 import fs2.kafka.{ConsumerSettings, ProducerSettings}
@@ -34,6 +34,7 @@ import scala.concurrent.ExecutionContext.global
 import scala.concurrent.Promise
 import scala.util.Try
 import higherkindness.mu.kafka.{ConsumerStream, ProducerStream}
+import cats.effect.Temporal
 
 class MuKafkaServiceSpec
     extends AnyFlatSpec
@@ -48,7 +49,7 @@ class MuKafkaServiceSpec
 
   // dependencies for mu kafka consumer & producer
   implicit val cs: ContextShift[IO] = IO.contextShift(global)
-  implicit val timer: Timer[IO]     = IO.timer(global)
+  implicit val timer: Temporal[IO]  = IO.timer(global)
   import higherkindness.mu.format.AvroWithSchema._
 
   // kafka config

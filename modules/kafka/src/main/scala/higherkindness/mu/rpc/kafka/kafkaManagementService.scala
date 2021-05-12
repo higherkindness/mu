@@ -16,7 +16,7 @@
 
 package higherkindness.mu.rpc.kafka
 
-import cats.effect.{Concurrent, ContextShift, Resource}
+import cats.effect.{Concurrent, Resource}
 import enumeratum.values.{IntEnum, IntEnumEntry}
 import fs2.kafka._
 import higherkindness.mu.rpc.protocol.{service, Empty}

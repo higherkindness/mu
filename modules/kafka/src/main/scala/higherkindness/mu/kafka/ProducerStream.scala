@@ -29,7 +29,6 @@ object ProducerStream {
       topic: String,
       settings: fs2.kafka.ProducerSettings[F, String, Array[Byte]]
   )(implicit
-      contextShift: ContextShift[F],
       concurrentEffect: ConcurrentEffect[F],
       encoder: Serialiser[A]
   ): fs2.Stream[F, Option[A]] => fs2.Stream[F, ByteArrayProducerResult] =
@@ -44,7 +43,6 @@ object ProducerStream {
       queue: Queue[F, Option[A]],
       settings: fs2.kafka.ProducerSettings[F, String, Array[Byte]]
   )(implicit
-      contextShift: ContextShift[F],
       concurrentEffect: ConcurrentEffect[F],
       encoder: Serialiser[A]
   ): Stream[F, ByteArrayProducerResult] =
