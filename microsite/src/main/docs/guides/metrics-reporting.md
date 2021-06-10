@@ -29,9 +29,6 @@ Let's see how to register server metrics using `Prometheus` in the following fra
 ```scala mdoc:invisible
 val EC: scala.concurrent.ExecutionContext = scala.concurrent.ExecutionContext.Implicits.global
 
-implicit val timer: cats.effect.Timer[cats.effect.IO]     = cats.effect.IO.timer(EC)
-implicit val cs: cats.effect.ContextShift[cats.effect.IO] = cats.effect.IO.contextShift(EC)
-
 import higherkindness.mu.rpc.protocol._
 
 object service {
@@ -53,13 +50,14 @@ import service._
 class ServiceHandler[F[_]: Applicative] extends Greeter[F] {
 
   override def sayHello(request: service.HelloRequest): F[service.HelloResponse] =
-    HelloResponse(reply = "Good bye!").pure
+    HelloResponse(reply = "Good bye!").pure[F]
 
 }
 ```
 
 ```scala mdoc:silent
-import cats.effect.IO
+import cats.effect._
+import cats.effect.std.Dispatcher
 import higherkindness.mu.rpc.prometheus.PrometheusMetrics
 import higherkindness.mu.rpc.server._
 import higherkindness.mu.rpc.server.interceptors.implicits._
@@ -73,11 +71,12 @@ object InterceptingServerCalls {
 
   implicit val greeterServiceHandler: ServiceHandler[IO] = new ServiceHandler[IO]
 
-  val server: IO[GrpcServer[IO]] = for {
-    metricsOps  <- PrometheusMetrics.build[IO](cr, "server")
+  val server: Resource[IO, GrpcServer[IO]] = for {
+    metricsOps  <- Resource.eval(PrometheusMetrics.build[IO](cr, "server"))
     service     <- Greeter.bindService[IO]
-    withMetrics = service.interceptWith(MetricsServerInterceptor(metricsOps))
-    server      <- GrpcServer.default[IO](8080, List(AddService(withMetrics)))
+    disp        <- Dispatcher[IO]
+    withMetrics = service.interceptWith(MetricsServerInterceptor(metricsOps, disp))
+    server      <- Resource.eval(GrpcServer.default[IO](8080, List(AddService(withMetrics))))
   } yield server
 
 }
@@ -103,11 +102,12 @@ object InterceptingClientCalls {
 
   val serviceClient: Resource[IO, Greeter[IO]] =
     for {
-      channelFor    <- Resource.liftF(ConfigForAddress[IO]("rpc.host", "rpc.port"))
-      metricsOps    <- Resource.liftF(PrometheusMetrics.build[IO](cr, "client"))
+      channelFor    <- Resource.eval(ConfigForAddress[IO]("rpc.host", "rpc.port"))
+      metricsOps    <- Resource.eval(PrometheusMetrics.build[IO](cr, "client"))
+      disp          <- Dispatcher[IO]
       serviceClient <- Greeter.client[IO](
         channelFor = channelFor,
-        channelConfigList = List(UsePlaintext(), AddInterceptor(MetricsChannelInterceptor(metricsOps))))
+        channelConfigList = List(UsePlaintext(), AddInterceptor(MetricsChannelInterceptor(metricsOps, disp))))
     } yield serviceClient
 
 }
@@ -123,7 +123,6 @@ The usage the same as before, but in this case we need to create a `Dropwizard` 
 import cats.effect.IO
 import com.codahale.metrics.MetricRegistry
 import higherkindness.mu.rpc.dropwizard.DropWizardMetrics
-import com.codahale.metrics.MetricRegistry
 
 val registry: MetricRegistry = new MetricRegistry()
 val metricsOps = DropWizardMetrics[IO](registry)

@@ -20,7 +20,7 @@ package fs2
 import higherkindness.mu.rpc.common._
 import higherkindness.mu.rpc.protocol._
 import _root_.fs2._
-import cats.effect.{Effect, IO, Resource}
+import cats.effect.{IO, Resource, Sync}
 import _root_.io.grpc.{CallOptions, Status}
 import cats.syntax.applicative._
 
@@ -74,7 +74,7 @@ object Utils extends CommonUtils {
       import database._
       import service._
 
-      class ServerRPCService[F[_]: Effect]
+      class ServerRPCService[F[_]: Sync]
           extends ProtoRPCService[F]
           with AvroRPCService[F]
           with AvroWithSchemaRPCService[F]
@@ -82,7 +82,7 @@ object Utils extends CommonUtils {
           with CompressedAvroRPCService[F]
           with CompressedAvroWithSchemaRPCService[F] {
 
-        def unary(a: A): F[C] = Effect[F].delay(c1)
+        def unary(a: A): F[C] = Sync[F].delay(c1)
 
         def unaryWithSchema(a: A): F[C] = unary(a)
 
@@ -92,7 +92,7 @@ object Utils extends CommonUtils {
 
         def serverStreaming(b: B): F[Stream[F, C]] = {
           debug(s"[fs2 - SERVER] b -> $b")
-          Stream.fromIterator(cList.iterator).pure[F]
+          Stream.fromIterator(cList.iterator, 1).pure[F]
         }
 
         def serverStreamingWithError(e: E): F[Stream[F, C]] = {
@@ -122,7 +122,7 @@ object Utils extends CommonUtils {
         def biStreaming(oe: Stream[F, E]): F[Stream[F, E]] =
           oe.flatMap { e: E =>
             save(e)
-            Stream.fromIterator(eList.iterator)
+            Stream.fromIterator(eList.iterator, 1)
           }.pure[F]
 
         def biStreamingWithSchema(oe: Stream[F, E]): F[Stream[F, E]] = biStreaming(oe)
@@ -142,11 +142,9 @@ object Utils extends CommonUtils {
 
   trait MuRuntime {
 
-    import TestsImplicits._
     import service._
     import handlers.server._
     import higherkindness.mu.rpc.server._
-    import cats.instances.list._
     import cats.syntax.traverse._
 
     //////////////////////////////////
@@ -156,7 +154,7 @@ object Utils extends CommonUtils {
     implicit val muRPCHandler: ServerRPCService[IO] =
       new ServerRPCService[IO]
 
-    val grpcConfigs: IO[List[GrpcConfig]] = List(
+    val grpcConfigs: Resource[IO, List[GrpcConfig]] = List(
       ProtoRPCService.bindService[IO],
       AvroRPCService.bindService[IO],
       AvroWithSchemaRPCService.bindService[IO],
@@ -165,8 +163,8 @@ object Utils extends CommonUtils {
       CompressedAvroWithSchemaRPCService.bindService[IO]
     ).sequence.map(_.map(AddService))
 
-    implicit val grpcServer: GrpcServer[IO] =
-      grpcConfigs.flatMap(createServerConf[IO]).unsafeRunSync()
+    val grpcServer: Resource[IO, GrpcServer[IO]] =
+      grpcConfigs.flatMap(createServerConf[IO])
 
     //////////////////////////////////
     // Client Runtime Configuration //

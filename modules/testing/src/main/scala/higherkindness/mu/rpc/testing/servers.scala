@@ -20,8 +20,7 @@ package testing
 import java.util.UUID
 
 import cats.effect.{Resource, Sync}
-import cats.syntax.apply._
-import cats.syntax.functor._
+import cats.syntax.all._
 import io.grpc.inprocess.{InProcessChannelBuilder, InProcessServerBuilder}
 import io.grpc.internal.NoopServerCall.NoopServerCallListener
 import io.grpc.util.MutableHandlerRegistry
@@ -49,16 +48,16 @@ object servers {
   }
 
   def withServerChannel[F[_]: Sync](
-      service: F[ServerServiceDefinition],
+      service: Resource[F, ServerServiceDefinition],
       clientInterceptor: Option[ClientInterceptor] = None
   ): Resource[F, ServerChannel] =
     withServerChannelList(service.map(List(_)), clientInterceptor)
 
   def withServerChannelList[F[_]: Sync](
-      services: F[List[ServerServiceDefinition]],
+      services: Resource[F, List[ServerServiceDefinition]],
       clientInterceptor: Option[ClientInterceptor] = None
   ): Resource[F, ServerChannel] =
-    Resource.eval(services).flatMap(ServerChannel.fromList(_, clientInterceptor))
+    services.flatMap(ServerChannel.fromList(_, clientInterceptor))
 
   final case class ServerChannel(server: Server, channel: ManagedChannel)
 
@@ -70,32 +69,36 @@ object servers {
     ): Resource[F, ServerChannel] =
       ServerChannel.fromList[F](List(serverServiceDefinition), clientInterceptor)
 
-    def fromList[F[_]: Sync](
+    def fromList[F[_]](
         serverServiceDefinitions: List[ServerServiceDefinition],
         clientInterceptor: Option[ClientInterceptor] = None
-    ): Resource[F, ServerChannel] = {
-      val serviceRegistry =
-        new MutableHandlerRegistry
-      val serverName: String =
-        UUID.randomUUID.toString
-      val serverBuilder: InProcessServerBuilder =
-        InProcessServerBuilder
-          .forName(serverName)
-          .fallbackHandlerRegistry(serviceRegistry)
-          .directExecutor()
-      val channelBuilder: InProcessChannelBuilder =
-        InProcessChannelBuilder.forName(serverName)
+    )(implicit F: Sync[F]): Resource[F, ServerChannel] = {
 
-      clientInterceptor.foreach(interceptor => channelBuilder.intercept(interceptor))
+      val setup = for {
+        serviceRegistry <- F.delay(new MutableHandlerRegistry)
+        serverName      <- F.delay(UUID.randomUUID.toString)
 
-      serverServiceDefinitions.map(serverBuilder.addService)
+        serverBuilder <- F.delay {
+          InProcessServerBuilder
+            .forName(serverName)
+            .fallbackHandlerRegistry(serviceRegistry)
+            .directExecutor()
+        }
+        channelBuilder <- F.delay(InProcessChannelBuilder.forName(serverName))
+        _ <- F.delay(clientInterceptor.foreach { interceptor =>
+          channelBuilder.intercept(interceptor)
+        })
+        _ <- F.delay(serverServiceDefinitions.map(serverBuilder.addService))
+      } yield (serverBuilder, channelBuilder)
 
       Resource.make {
-        (
-          Sync[F].delay(serverBuilder.build().start()),
-          Sync[F].delay(channelBuilder.directExecutor.build)
-        ).mapN(ServerChannel(_, _))
-      }(sc => Sync[F].delay(sc.server.shutdown()).void)
+        setup.flatMap { case (sb, cb) =>
+          (
+            F.delay(sb.build().start()),
+            F.delay(cb.directExecutor.build())
+          ).mapN(ServerChannel(_, _))
+        }
+      }(sc => F.delay(sc.server.shutdown()).void)
     }
 
   }

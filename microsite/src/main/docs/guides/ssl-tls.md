@@ -70,13 +70,12 @@ these in the [gRPC server and client tutorial](../tutorials/grpc-server-client).
 
 ```scala mdoc:invisible
 trait CommonRuntime {
+  import cats.effect.unsafe
 
   val EC: scala.concurrent.ExecutionContext =
     scala.concurrent.ExecutionContext.Implicits.global
 
-  implicit val timer: cats.effect.Timer[cats.effect.IO]     = cats.effect.IO.timer(EC)
-  implicit val cs: cats.effect.ContextShift[cats.effect.IO] = cats.effect.IO.contextShift(EC)
-
+  implicit val ioRuntime: unsafe.IORuntime = unsafe.IORuntime.global
 }
 
 import higherkindness.mu.rpc.protocol._
@@ -141,7 +140,7 @@ trait Runtime extends CommonRuntime {
 
   // Add the SslContext to the list of GrpConfigs.
 
-  val grpcConfigs: IO[List[GrpcConfig]] =
+  val grpcConfigs: Resource[IO, List[GrpcConfig]] =
      Greeter.bindService[IO]
        .map(AddService)
        .map(c => List(SetSslContext(serverSslContext), c))
@@ -149,7 +148,7 @@ trait Runtime extends CommonRuntime {
   // Important: we have to create the server with Netty.
   // This is the only server transport that supports SSL encryption.
 
-  val server: IO[GrpcServer[IO]] = grpcConfigs.flatMap(GrpcServer.netty[IO](8080, _))
+  val server: Resource[IO, GrpcServer[IO]] = grpcConfigs.evalMap(GrpcServer.netty[IO](8080, _))
 
 }
 

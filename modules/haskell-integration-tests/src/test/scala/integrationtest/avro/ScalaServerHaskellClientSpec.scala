@@ -16,16 +16,13 @@
 
 package integrationtest.avro
 
-import integrationtest._
-import weather._
+import cats.effect.{IO, Resource}
+import cats.effect.unsafe.implicits.global
 import higherkindness.mu.rpc.server.{AddService, GrpcServer}
-
-import cats.effect.{ContextShift, IO}
-
+import integrationtest._
+import integrationtest.avro.weather._
 import org.scalatest.BeforeAndAfterAll
 import org.scalatest.flatspec.AnyFlatSpec
-
-import scala.concurrent.ExecutionContext
 
 class ScalaServerHaskellClientSpec
     extends AnyFlatSpec
@@ -34,25 +31,17 @@ class ScalaServerHaskellClientSpec
 
   def clientExecutableName: String = "avro-client"
 
-  implicit val CS: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
-
   implicit val service: WeatherService[IO] = new MyWeatherService[IO]
 
-  private val startServer: IO[Unit] = for {
+  private val startServer: Resource[IO, Unit] = for {
     serviceDef <- WeatherService.bindService[IO]
-    serverDef  <- GrpcServer.default[IO](Constants.AvroPort, List(AddService(serviceDef)))
-    _          <- GrpcServer.server[IO](serverDef)
+    _          <- GrpcServer.defaultServer[IO](Constants.AvroPort, List(AddService(serviceDef)))
   } yield ()
 
   private var cancelToken: IO[Unit] = IO.unit
 
   override def beforeAll(): Unit = {
-    cancelToken = startServer.unsafeRunCancelable {
-      case Left(e) =>
-        println(s"Server failed! $e")
-      case Right(_) =>
-        println("Server completed (this should never happen)")
-    }
+    cancelToken = startServer.allocated.unsafeRunSync()._2
     Thread.sleep(500) // give the server a chance to start up
   }
 

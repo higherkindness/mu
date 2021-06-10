@@ -19,12 +19,13 @@ package higherkindness.mu.rpc.common
 import cats.data.Kleisli
 import org.scalactic.Prettifier
 import org.scalamock.scalatest.MockFactory
-import org.scalatest._
 import scala.io._
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
+import cats.effect.unsafe
 
-trait RpcBaseTestSuite extends AnyWordSpec with Matchers with OneInstancePerTest with MockFactory {
+trait RpcBaseTestSuite extends AnyWordSpec with Matchers with MockFactory {
+  implicit val ioRuntime: unsafe.IORuntime = unsafe.IORuntime.global
 
   trait Helpers {
 
@@ -37,11 +38,6 @@ trait RpcBaseTestSuite extends AnyWordSpec with Matchers with OneInstancePerTest
     // initial linebreak makes expected/actual results line up nicely
     System.lineSeparator + Prettifier.default(x)
   }
-
-  // delegating the check to a def gets its name used in the cancellation message (cleaner than the boolean comparison result)
-  private[this] def runningLocally: Boolean = System.getenv("TRAVIS") != "true"
-
-  def ignoreOnTravis(msg: => String): Assertion = assume(runningLocally, msg)
 
   def resource(path: String): BufferedSource =
     Source.fromInputStream(getClass.getResourceAsStream(path))

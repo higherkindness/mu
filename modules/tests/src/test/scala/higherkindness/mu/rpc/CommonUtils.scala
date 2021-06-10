@@ -16,17 +16,15 @@
 
 package higherkindness.mu.rpc
 
-import java.net.ServerSocket
-
-import cats.Functor
-import cats.effect.{Resource, Sync}
-import cats.syntax.functor._
+import cats.effect.kernel.Async
+import cats.effect.{unsafe, IO, Resource, Sync}
 import higherkindness.mu.rpc.common._
 import higherkindness.mu.rpc.server._
 import higherkindness.mu.rpc.testing.servers.withServerChannel
 import io.grpc.{ManagedChannel, ServerServiceDefinition}
 import org.slf4j.LoggerFactory
 
+import java.net.ServerSocket
 import scala.util.{Failure, Success, Try}
 
 trait CommonUtils {
@@ -59,20 +57,11 @@ trait CommonUtils {
   def createChannelForPort(port: Int): ChannelFor =
     ChannelForAddress(SC.host, port)
 
-  def createServerConf[F[_]: Sync](grpcConfigs: List[GrpcConfig]): F[GrpcServer[F]] =
-    GrpcServer.default[F](SC.port, grpcConfigs)
+  def createServerConf[F[_]: Async](grpcConfigs: List[GrpcConfig]): Resource[F, GrpcServer[F]] =
+    GrpcServer.defaultServer[F](SC.port, grpcConfigs)
 
   def createServerConfOnRandomPort[F[_]: Sync](grpcConfigs: List[GrpcConfig]): F[GrpcServer[F]] =
     GrpcServer.default[F](pickUnusedPort, grpcConfigs)
-
-  def serverStart[F[_]: Functor](implicit S: GrpcServer[F]): F[Unit] =
-    S.start().void
-
-  def serverStop[F[_]: Functor](implicit S: GrpcServer[F]): F[Unit] =
-    S.shutdownNow().void
-
-  def serverAwaitTermination[F[_]: Functor](implicit S: GrpcServer[F]): F[Unit] =
-    S.awaitTermination().void
 
   def debug(str: String): Unit = logger.debug(str)
 
@@ -89,11 +78,11 @@ trait CommonUtils {
     }
 
   def withClient[Client, T](
-      serviceDef: ConcurrentMonad[ServerServiceDefinition],
-      resourceBuilder: ConcurrentMonad[ManagedChannel] => Resource[ConcurrentMonad, Client]
-  )(f: Client => T): T =
+      serviceDef: Resource[IO, ServerServiceDefinition],
+      resourceBuilder: IO[ManagedChannel] => Resource[IO, Client]
+  )(f: Client => T)(implicit ioRuntime: unsafe.IORuntime): T =
     withServerChannel(serviceDef)
-      .flatMap(sc => resourceBuilder(suspendM(sc.channel)))
-      .use(client => suspendM(f(client)))
+      .flatMap(sc => resourceBuilder(IO(sc.channel)))
+      .use(client => IO(f(client)))
       .unsafeRunSync()
 }

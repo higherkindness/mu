@@ -24,7 +24,7 @@ import org.http4s._
 import org.http4s.circe._
 import org.http4s.client._
 
-class UnaryGreeterRestClient[F[_]: Sync](uri: Uri) {
+class UnaryGreeterRestClient[F[_]: Concurrent](uri: Uri) {
 
   def getHello()(
       client: Client[F]
@@ -45,7 +45,7 @@ class UnaryGreeterRestClient[F[_]: Sync](uri: Uri) {
 
 }
 
-class Fs2GreeterRestClient[F[_]: Sync](uri: Uri) {
+class Fs2GreeterRestClient[F[_]: Concurrent](uri: Uri) {
 
   def sayHellos(arg: Stream[F, HelloRequest])(client: Client[F])(implicit
       encoderHelloRequest: io.circe.Encoder[HelloRequest],

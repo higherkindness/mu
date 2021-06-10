@@ -16,18 +16,11 @@
 
 package higherkindness.mu.rpc.kafka
 
-import cats.effect.{Concurrent, ContextShift, Resource}
+import cats.effect.Resource
+import cats.effect.kernel.Async
 import enumeratum.values.{IntEnum, IntEnumEntry}
-import fs2.kafka._
+import fs2.kafka.{KafkaAdminClient, _}
 import higherkindness.mu.rpc.protocol.{service, Empty}
-import org.apache.kafka.common.{
-  ConsumerGroupState => KConsumerGroupState,
-  Node => KNode,
-  TopicPartition => KTopicPartition,
-  TopicPartitionInfo => KTopicPartitionInfo
-}
-import org.apache.kafka.common.acl.{AclOperation => KAclOperation}
-import org.apache.kafka.common.config.{ConfigResource => KConfigResource}
 import org.apache.kafka.clients.admin.{
   AlterConfigOp => KAlterConfigOp,
   ConfigEntry => KConfigEntry,
@@ -39,10 +32,17 @@ import org.apache.kafka.clients.admin.{
   TopicListing => KTopicListing
 }
 import org.apache.kafka.clients.consumer.{OffsetAndMetadata => KOffsetAndMetadata}
+import org.apache.kafka.common.acl.{AclOperation => KAclOperation}
+import org.apache.kafka.common.config.{ConfigResource => KConfigResource}
+import org.apache.kafka.common.{
+  ConsumerGroupState => KConsumerGroupState,
+  Node => KNode,
+  TopicPartition => KTopicPartition,
+  TopicPartitionInfo => KTopicPartitionInfo
+}
 
 import scala.collection.immutable
 import scala.jdk.CollectionConverters._
-import fs2.kafka.KafkaAdminClient
 
 object kafkaManagementService {
   final case class CreatePartitionsRequest(name: String, numPartitions: Int)
@@ -361,8 +361,8 @@ object kafkaManagementService {
   }
 
   object KafkaManagement {
-    def buildInstance[F[_]: ContextShift: Concurrent](
-        settings: AdminClientSettings[F]
+    def buildInstance[F[_]: Async](
+        settings: AdminClientSettings
     ): Resource[F, KafkaManagement[F]] =
       KafkaAdminClient
         .resource[F](settings)

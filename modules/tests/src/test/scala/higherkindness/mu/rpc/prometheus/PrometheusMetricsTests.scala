@@ -18,6 +18,7 @@ package higherkindness.mu.rpc.prometheus
 
 import cats.effect.IO
 import cats.implicits._
+import cats.effect.unsafe.implicits._
 import higherkindness.mu.rpc.internal.interceptors.GrpcMethodInfo
 import higherkindness.mu.rpc.internal.metrics.MetricsOpsGenerators._
 import io.grpc.Status

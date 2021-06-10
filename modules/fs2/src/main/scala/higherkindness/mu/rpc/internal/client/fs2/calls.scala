@@ -16,41 +16,45 @@
 
 package higherkindness.mu.rpc.internal.client.fs2
 
-import fs2.Stream
-
 import cats.data.Kleisli
-import cats.effect.ConcurrentEffect
-import cats.syntax.applicative._
-import cats.syntax.flatMap._
-import cats.syntax.functor._
+import cats.effect.Async
+import cats.effect.std.Dispatcher
+import cats.syntax.all._
+import fs2.Stream
+import fs2.grpc.client.{ClientOptions, Fs2ClientCall}
 import higherkindness.mu.rpc.internal.client.tracingKernelToHeaders
 import io.grpc.{CallOptions, Channel, Metadata, MethodDescriptor}
-import org.lyranthe.fs2_grpc.java_runtime.client.Fs2ClientCall
 import natchez.Span
 
 object calls {
 
-  def unary[F[_]: ConcurrentEffect, Req, Res](
+  def unary[F[_]: Async, Req, Res](
       request: Req,
       descriptor: MethodDescriptor[Req, Res],
       channel: Channel,
       options: CallOptions,
       headers: Metadata = new Metadata()
-  ): F[Res] =
-    Fs2ClientCall[F](channel, descriptor, options)
-      .flatMap(_.unaryToUnaryCall(request, headers))
+  ): F[Res] = {
+    Dispatcher[F].use { disp =>
+      Fs2ClientCall[F]
+        .apply(channel, descriptor, disp, clientOptions(options))
+        .flatMap(_.unaryToUnaryCall(request, headers))
+    }
+  }
 
-  def clientStreaming[F[_]: ConcurrentEffect, Req, Res](
+  def clientStreaming[F[_]: Async, Req, Res](
       input: Stream[F, Req],
       descriptor: MethodDescriptor[Req, Res],
       channel: Channel,
       options: CallOptions,
       headers: Metadata = new Metadata()
   ): F[Res] =
-    Fs2ClientCall[F](channel, descriptor, options)
-      .flatMap(_.streamingToUnaryCall(input, headers))
+    Dispatcher[F].use { disp =>
+      Fs2ClientCall[F](channel, descriptor, disp, clientOptions(options))
+        .flatMap(_.streamingToUnaryCall(input, headers))
+    }
 
-  def serverStreaming[F[_]: ConcurrentEffect, Req, Res](
+  def serverStreaming[F[_]: Async, Req, Res](
       request: Req,
       descriptor: MethodDescriptor[Req, Res],
       channel: Channel,
@@ -58,11 +62,15 @@ object calls {
       headers: Metadata = new Metadata()
   ): F[Stream[F, Res]] =
     Stream
-      .eval(Fs2ClientCall[F](channel, descriptor, options))
-      .flatMap(_.unaryToStreamingCall(request, headers))
-      .pure[F]
+      .resource(Dispatcher[F])
+      .flatMap { disp =>
+        Stream
+          .eval(Fs2ClientCall[F](channel, descriptor, disp, clientOptions(options)))
+          .flatMap(_.unaryToStreamingCall(request, headers))
+      }
+      .pure[F] // Why is this F[Stream[F, A]]? That type makes no sense.
 
-  def bidiStreaming[F[_]: ConcurrentEffect, Req, Res](
+  def bidiStreaming[F[_]: Async, Req, Res](
       input: Stream[F, Req],
       descriptor: MethodDescriptor[Req, Res],
       channel: Channel,
@@ -70,11 +78,15 @@ object calls {
       headers: Metadata = new Metadata()
   ): F[Stream[F, Res]] =
     Stream
-      .eval(Fs2ClientCall[F](channel, descriptor, options))
-      .flatMap(_.streamingToStreamingCall(input, headers))
+      .resource(Dispatcher[F])
+      .flatMap { disp =>
+        Stream
+          .eval(Fs2ClientCall[F](channel, descriptor, disp, clientOptions(options)))
+          .flatMap(_.streamingToStreamingCall(input, headers))
+      }
       .pure[F]
 
-  def tracingClientStreaming[F[_]: ConcurrentEffect, Req, Res](
+  def tracingClientStreaming[F[_]: Async, Req, Res](
       input: Stream[Kleisli[F, Span[F], *], Req],
       descriptor: MethodDescriptor[Req, Res],
       channel: Channel,
@@ -85,7 +97,7 @@ object calls {
         span.kernel.flatMap { kernel =>
           val headers = tracingKernelToHeaders(kernel)
           val streamF: Stream[F, Req] =
-            input.translateInterruptible(Kleisli.applyK[F, Span[F]](span))
+            input.translate(Kleisli.applyK[F, Span[F]](span))
           clientStreaming[F, Req, Res](
             streamF,
             descriptor,
@@ -97,7 +109,7 @@ object calls {
       }
     }
 
-  def tracingServerStreaming[F[_]: ConcurrentEffect, Req, Res](
+  def tracingServerStreaming[F[_]: Async, Req, Res](
       request: Req,
       descriptor: MethodDescriptor[Req, Res],
       channel: Channel,
@@ -108,14 +120,18 @@ object calls {
         span.kernel.map { kernel =>
           val headers = tracingKernelToHeaders(kernel)
           Stream
-            .eval(Fs2ClientCall[F](channel, descriptor, options))
-            .flatMap(_.unaryToStreamingCall(request, headers))
-            .translateInterruptible(Kleisli.liftK[F, Span[F]])
+            .resource(Dispatcher[F])
+            .flatMap { disp =>
+              Stream
+                .eval(Fs2ClientCall[F](channel, descriptor, disp, clientOptions(options)))
+                .flatMap(_.unaryToStreamingCall(request, headers))
+            }
+            .translate(Kleisli.liftK[F, Span[F]])
         }
       }
     }
 
-  def tracingBidiStreaming[F[_]: ConcurrentEffect, Req, Res](
+  def tracingBidiStreaming[F[_]: Async, Req, Res](
       input: Stream[Kleisli[F, Span[F], *], Req],
       descriptor: MethodDescriptor[Req, Res],
       channel: Channel,
@@ -126,13 +142,21 @@ object calls {
         span.kernel.map { kernel =>
           val headers = tracingKernelToHeaders(kernel)
           val streamF: Stream[F, Req] =
-            input.translateInterruptible(Kleisli.applyK[F, Span[F]](span))
+            input.translate(Kleisli.applyK[F, Span[F]](span))
           Stream
-            .eval(Fs2ClientCall[F](channel, descriptor, options))
-            .flatMap(_.streamingToStreamingCall(streamF, headers))
-            .translateInterruptible(Kleisli.liftK[F, Span[F]])
+            .resource(Dispatcher[F])
+            .flatMap { disp =>
+              Stream
+                .eval(Fs2ClientCall[F](channel, descriptor, disp, clientOptions(options)))
+                .flatMap(_.streamingToStreamingCall(streamF, headers))
+            }
+            .translate(Kleisli.liftK[F, Span[F]])
         }
       }
     }
 
+  // This is kind of ugly, but fixing the macro which calls the other methods in here would be complex,
+  // since it also handles monix etc, not just fs2-grpc
+  private def clientOptions(options: CallOptions): ClientOptions =
+    ClientOptions.default.configureCallOptions(_ => options)
 }

@@ -17,11 +17,11 @@
 package higherkindness.mu.rpc.benchmarks
 package shared
 
-import cats.effect.Effect
+import cats.effect.Sync
 import cats.syntax.applicative._
 import higherkindness.mu.rpc.benchmarks.shared.models._
 
-class PersistenceService[F[_]: Effect] {
+class PersistenceService[F[_]: Sync] {
 
   def listPersons: F[PersonList] = {
     val search = database.persons
@@ -29,7 +29,7 @@ class PersistenceService[F[_]: Effect] {
   }
 
   def getPerson(pId: PersonId): F[Person] =
-    Effect[F].delay(
+    Sync[F].delay(
       database.persons
         .find(_.id == pId.id)
         .getOrElse(throw DatabaseException(s"User $pId not found"))
@@ -44,5 +44,5 @@ class PersistenceService[F[_]: Effect] {
 }
 
 object PersistenceService {
-  def apply[F[_]: Effect] = new PersistenceService[F]
+  def apply[F[_]: Sync] = new PersistenceService[F]
 }

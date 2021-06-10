@@ -74,7 +74,7 @@ We're going to use cats-effect `IO` as our concrete IO monad, and we'll make use
 `IOApp` from cats-effect.
 
 ```scala mdoc:silent
-import cats.effect.{IO, IOApp, ExitCode}
+import cats.effect.{IO, IOApp, ExitCode, Resource}
 import hello.Greeter
 import higherkindness.mu.rpc.server.{GrpcServer, AddService}
 
@@ -82,11 +82,11 @@ object Server extends IOApp {
 
   implicit val greeter: Greeter[IO] = new HappyGreeter[IO]  // 1
 
-  def run(args: List[String]): IO[ExitCode] = for {
-    serviceDef <- Greeter.bindService[IO]                                      // 2
-    server     <- GrpcServer.default[IO](12345, List(AddService(serviceDef)))  // 3
-    _          <- GrpcServer.server[IO](server)                                // 4
-  } yield ExitCode.Success
+  def run(args: List[String]): IO[ExitCode] = (for {
+    serviceDef <- Greeter.bindService[IO]                                                     // 2
+    server     <- Resource.eval(GrpcServer.default[IO](12345, List(AddService(serviceDef))))  // 3
+    _          <- GrpcServer.serverResource[IO](server)                                               // 4
+  } yield ()).useForever
 
 }
 ```
@@ -112,7 +112,7 @@ Let's go through this line by line.
    list of services we want it to expose. The method is called `default` because
    we want to use gRPC's default HTTP transport layer.
 
-4. Finally we can call `GrpcServer.server`, passing it our server description.
+4. Finally we can call `GrpcServer.serverResource`, passing it our server description.
    This actually starts the server.
 
 If you copy the above code into a `.scala` file in the `server` module of your

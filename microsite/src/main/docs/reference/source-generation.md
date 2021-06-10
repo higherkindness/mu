@@ -229,28 +229,28 @@ object myproto {
 
   object MyService {
 
-    def bindService[F[_]: ConcurrentEffect](
+    def bindService[F[_]: Concurrent](
       implicit algebra: MyService[F]
     ): F[io.grpc.ServerServiceDefinition] = ...
 
-    def client[F[_]: ConcurrentEffect: ContextShift](
+    def client[F[_]: Concurrent](
       channelFor: higherkindness.mu.rpc.ChannelFor,
       channelConfigList: List[higherkindness.mu.rpc.channel.ManagedChannelConfig] = List(UsePlaintext),
       options: io.grpc.CallOptions = io.grpc.CallOptions.DEFAULT
     ): Resource[F, MyService[F]] = ...
 
-    def clientFromChannel[F[_]: ConcurrentEffect: ContextShift](
+    def clientFromChannel[F[_]: Concurrent](
       channel: F[io.grpc.ManagedChannel],
       options: io.grpc.CallOptions = io.grpc.CallOptions.DEFAULT
     ): Resource[F, MyService[F]]
 
-    def unsafeClient[F[_]: ConcurrentEffect: ContextShift](
+    def unsafeClient[F[_]: Concurrent](
       channelFor: higherkindness.mu.rpc.ChannelFor,
       channelConfigList: List[higherkindness.mu.rpc.channel.ManagedChannelConfig] = List(UsePlaintext),
       options: io.grpc.CallOptions = io.grpc.CallOptions.DEFAULT
     ): MyService[F] = ...
 
-    def unsafeClientFromChannel[F[_]: ConcurrentEffect: ContextShift](
+    def unsafeClientFromChannel[F[_]: Concurrent](
       channel: io.grpc.ManagedChannel,
       options: io.grpc.CallOptions = io.grpc.CallOptions.DEFAULT
     ): MyService[F]

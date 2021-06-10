@@ -17,23 +17,17 @@
 package higherkindness.mu.rpc.protocol
 
 import cats.data.Kleisli
-import cats.syntax.applicative._
-import cats.syntax.flatMap._
-import cats.syntax.functor._
-import cats.effect.{Async, IO, Resource}
-import cats.effect.concurrent.Ref
-import cats.instances.int._
+import cats.effect.{Async, IO, Ref, Resource}
+import cats.syntax.all._
 import fs2.Stream
 import higherkindness.mu.rpc._
+import higherkindness.mu.rpc.protocol.Tracing._
 import higherkindness.mu.rpc.server._
 import io.grpc.ServerServiceDefinition
-import monix.reactive.Observable
-import monix.execution.Scheduler
 import natchez._
 import org.scalatest.funspec.AnyFunSpec
-import scala.util.Random
 
-import Tracing._
+import scala.util.Random
 
 class RPCTracingTests extends AnyFunSpec {
 
@@ -55,20 +49,7 @@ class RPCTracingTests extends AnyFunSpec {
       def fs2BidiStreaming(req: Stream[F, Request]): F[Stream[F, Response]]
     }
 
-    @service(Protobuf, namespace = Some("com.foo"))
-    trait MonixServiceDef[F[_]] {
-      def monixClientStreaming(req: Observable[Request]): F[Response]
-      def monixServerStreaming(req: Request): F[Observable[Response]]
-      def monixBidiStreaming(req: Observable[Request]): F[Observable[Response]]
-    }
-
-    class TracingServiceDef[F[_]: Async: Trace](s: Scheduler)(implicit
-        c: Stream.Compiler[F, F]
-    ) extends UnaryServiceDef[F]
-        with FS2ServiceDef[F]
-        with MonixServiceDef[F] {
-
-      implicit val scheduler: Scheduler = s
+    class TracingServiceDef[F[_]: Async: Trace]() extends UnaryServiceDef[F] with FS2ServiceDef[F] {
 
       def measureString(req: Request): F[Response] =
         Trace[F].span("do something on server side") {
@@ -83,16 +64,6 @@ class RPCTracingTests extends AnyFunSpec {
 
       def fs2BidiStreaming(req: Stream[F, Request]): F[Stream[F, Response]] =
         req.map(r => Response(r.s.length)).pure[F]
-
-      def monixClientStreaming(req: Observable[Request]): F[Response] =
-        req.map(_.s.length).foldL.map(Response(_)).toAsync[F]
-
-      def monixServerStreaming(req: Request): F[Observable[Response]] =
-        Observable(Response(req.s.length)).pure[F]
-
-      def monixBidiStreaming(req: Observable[Request]): F[Observable[Response]] =
-        req.map(r => Response(r.s.length)).pure[F]
-
     }
 
   }
@@ -104,27 +75,24 @@ class RPCTracingTests extends AnyFunSpec {
   val channelFor = ChannelForAddress("localhost", serverPort)
 
   implicit val tracingService: TracingServiceDef[Kleisli[IO, Span[IO], *]] =
-    new TracingServiceDef[Kleisli[IO, Span[IO], *]](Scheduler(EC))
+    new TracingServiceDef[Kleisli[IO, Span[IO], *]]()
 
   def serverResource(S: GrpcServer[IO]): Resource[IO, Unit] =
-    Resource.make(S.start())(_ => S.shutdown() >> S.awaitTermination())
+    Resource.make(S.start)(_ => S.shutdown >> S.awaitTermination)
 
   /**
    * Build a Resource that starts a server and builds a client to connect to it.
    * The resource finalizer will shut down the server.
    */
   def mkClientResource[C[_[_]]](
-      bind: EntryPoint[IO] => IO[ServerServiceDefinition],
+      bind: EntryPoint[IO] => Resource[IO, ServerServiceDefinition],
       fromChannelFor: ChannelFor => Resource[IO, C[Kleisli[IO, Span[IO], *]]],
       ep: EntryPoint[IO]
   ): Resource[IO, C[Kleisli[IO, Span[IO], *]]] =
     for {
-      serviceDef <- Resource.eval(bind(ep))
-      grpcServer <- Resource.eval(
-        GrpcServer.default[IO](serverPort, List(AddService(serviceDef)))
-      )
-      _         <- serverResource(grpcServer)
-      clientRes <- fromChannelFor(channelFor)
+      serviceDef <- bind(ep)
+      _          <- GrpcServer.defaultServer[IO](serverPort, List(AddService(serviceDef)))
+      clientRes  <- fromChannelFor(channelFor)
     } yield clientRes
 
   /*
@@ -228,7 +196,7 @@ class RPCTracingTests extends AnyFunSpec {
               respStreamK <- client.fs2ServerStreaming(Request("abc")).run(span)
               respStream =
                 respStreamK
-                  .translateInterruptible(Kleisli.applyK[IO, Span[IO]](span))
+                  .translate(Kleisli.applyK[IO, Span[IO]](span))
               lastResp <- respStream.compile.lastOrError
             } yield lastResp
           }
@@ -263,7 +231,7 @@ class RPCTracingTests extends AnyFunSpec {
               respStreamK <- client.fs2BidiStreaming(reqStream).run(span)
               respStream =
                 respStreamK
-                  .translateInterruptible(Kleisli.applyK[IO, Span[IO]](span))
+                  .translate(Kleisli.applyK[IO, Span[IO]](span))
               lastResp <- respStream.compile.lastOrError
             } yield lastResp
           }
@@ -277,103 +245,6 @@ class RPCTracingTests extends AnyFunSpec {
           "End span 1 [com.foo.FS2ServiceDef/fs2BidiStreaming] (child of 0)",
           "Start span 2 [com.foo.FS2ServiceDef/fs2BidiStreaming] (child of 1)",
           "End span 2 [com.foo.FS2ServiceDef/fs2BidiStreaming] (child of 1)",
-          "End span 0 [client root span] (root)"
-        )
-        assert(log == expectedLog)
-      }
-
-    }
-
-    describe("Monix streaming endpoints") {
-
-      implicit val scheduler: Scheduler = Scheduler(EC)
-
-      it("traces a client-streaming call") {
-        val ref: Ref[IO, TracingData] = Ref.unsafe(TracingData(0, Vector.empty))
-        val ep: EntryPoint[IO]        = entrypoint(ref)
-        val clientResource = mkClientResource(
-          MonixServiceDef.bindTracingService[IO],
-          MonixServiceDef.tracingClient[IO](_),
-          ep
-        )
-
-        val prog: IO[(Response, List[String])] =
-          program(clientResource, ep, ref) { case (client, span) =>
-            client.monixClientStreaming(Observable(Request("abc"), Request("defg"))).run(span)
-          }
-        val (response, log) = prog.unsafeRunSync()
-
-        assert(response == Response(length = 7))
-
-        val expectedLog = List(
-          "Start span 0 [client root span] (root)",
-          "Start span 1 [com.foo.MonixServiceDef/monixClientStreaming] (child of 0)",
-          "Start span 2 [com.foo.MonixServiceDef/monixClientStreaming] (child of 1)",
-          "End span 2 [com.foo.MonixServiceDef/monixClientStreaming] (child of 1)",
-          "End span 1 [com.foo.MonixServiceDef/monixClientStreaming] (child of 0)",
-          "End span 0 [client root span] (root)"
-        )
-        assert(log == expectedLog)
-      }
-
-      it("traces a server-streaming call") {
-        val ref: Ref[IO, TracingData] = Ref.unsafe(TracingData(0, Vector.empty))
-        val ep: EntryPoint[IO]        = entrypoint(ref)
-        val clientResource = mkClientResource(
-          MonixServiceDef.bindTracingService[IO],
-          MonixServiceDef.tracingClient[IO](_),
-          ep
-        )
-
-        val prog: IO[(Response, List[String])] =
-          program(clientResource, ep, ref) { case (client, span) =>
-            for {
-              respObs  <- client.monixServerStreaming(Request("abc")).run(span)
-              lastResp <- respObs.lastL.toAsync[IO]
-            } yield lastResp
-          }
-        val (response, log) = prog.unsafeRunSync()
-
-        assert(response == Response(length = 3))
-
-        val expectedLog = List(
-          "Start span 0 [client root span] (root)",
-          "Start span 1 [com.foo.MonixServiceDef/monixServerStreaming] (child of 0)",
-          "End span 1 [com.foo.MonixServiceDef/monixServerStreaming] (child of 0)",
-          "Start span 2 [com.foo.MonixServiceDef/monixServerStreaming] (child of 1)",
-          "End span 2 [com.foo.MonixServiceDef/monixServerStreaming] (child of 1)",
-          "End span 0 [client root span] (root)"
-        )
-        assert(log == expectedLog)
-      }
-
-      it("traces a bidirectional-streaming call") {
-        val ref: Ref[IO, TracingData] = Ref.unsafe(TracingData(0, Vector.empty))
-        val ep: EntryPoint[IO]        = entrypoint(ref)
-        val clientResource = mkClientResource(
-          MonixServiceDef.bindTracingService[IO],
-          MonixServiceDef.tracingClient[IO](_),
-          ep
-        )
-
-        val prog: IO[(Response, List[String])] =
-          program(clientResource, ep, ref) { case (client, span) =>
-            val reqObs = Observable(Request("abc"))
-            for {
-              respObs  <- client.monixBidiStreaming(reqObs).run(span)
-              lastResp <- respObs.lastL.toAsync[IO]
-            } yield lastResp
-          }
-        val (response, log) = prog.unsafeRunSync()
-
-        assert(response == Response(length = 3))
-
-        val expectedLog = List(
-          "Start span 0 [client root span] (root)",
-          "Start span 1 [com.foo.MonixServiceDef/monixBidiStreaming] (child of 0)",
-          "End span 1 [com.foo.MonixServiceDef/monixBidiStreaming] (child of 0)",
-          "Start span 2 [com.foo.MonixServiceDef/monixBidiStreaming] (child of 1)",
-          "End span 2 [com.foo.MonixServiceDef/monixBidiStreaming] (child of 1)",
           "End span 0 [client root span] (root)"
         )
         assert(log == expectedLog)

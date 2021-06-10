@@ -16,7 +16,7 @@
 
 package higherkindness.mu.rpc.kafka
 
-import cats.effect.{Concurrent, ContextShift}
+import cats.effect.Concurrent
 import cats.implicits._
 import fs2.kafka._
 import higherkindness.mu.rpc.protocol.Empty
@@ -24,7 +24,7 @@ import org.apache.kafka.clients.admin.{NewPartitions, NewTopic}
 
 import kafkaManagementService._
 
-class KafkaManagementImpl[F[_]: ContextShift: Concurrent] private[kafka] (
+class KafkaManagementImpl[F[_]: Concurrent] private[kafka] (
     adminClient: KafkaAdminClient[F]
 ) extends KafkaManagement[F] {
 

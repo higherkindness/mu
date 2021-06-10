@@ -17,6 +17,7 @@
 package higherkindness.mu.rpc.healthcheck.unary
 
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import higherkindness.mu.rpc.healthcheck.unary.handler._
 import higherkindness.mu.rpc.protocol.Empty
 import org.scalatest.matchers.should.Matchers

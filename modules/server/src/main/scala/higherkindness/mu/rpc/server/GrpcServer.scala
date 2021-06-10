@@ -27,7 +27,7 @@ import scala.concurrent.duration.TimeUnit
 
 trait GrpcServer[F[_]] { self =>
 
-  def start(): F[Unit]
+  def start: F[Unit]
 
   def getPort: F[Int]
 
@@ -37,9 +37,9 @@ trait GrpcServer[F[_]] { self =>
 
   def getMutableServices: F[List[ServerServiceDefinition]]
 
-  def shutdown(): F[Unit]
+  def shutdown: F[Unit]
 
-  def shutdownNow(): F[Unit]
+  def shutdownNow: F[Unit]
 
   def isShutdown: F[Boolean]
 
@@ -47,11 +47,11 @@ trait GrpcServer[F[_]] { self =>
 
   def awaitTerminationTimeout(timeout: Long, unit: TimeUnit): F[Boolean]
 
-  def awaitTermination(): F[Unit]
+  def awaitTermination: F[Unit]
 
   def mapK[G[_]](fk: F ~> G): GrpcServer[G] =
     new GrpcServer[G] {
-      def start(): G[Unit] = fk(self.start())
+      def start: G[Unit] = fk(self.start)
 
       def getPort: G[Int] = fk(self.getPort)
 
@@ -61,9 +61,9 @@ trait GrpcServer[F[_]] { self =>
 
       def getMutableServices: G[List[ServerServiceDefinition]] = fk(self.getMutableServices)
 
-      def shutdown(): G[Unit] = fk(self.shutdown())
+      def shutdown: G[Unit] = fk(self.shutdown)
 
-      def shutdownNow(): G[Unit] = fk(self.shutdownNow())
+      def shutdownNow: G[Unit] = fk(self.shutdownNow)
 
       def isShutdown: G[Boolean] = fk(self.isShutdown)
 
@@ -72,18 +72,24 @@ trait GrpcServer[F[_]] { self =>
       def awaitTerminationTimeout(timeout: Long, unit: TimeUnit): G[Boolean] =
         fk(self.awaitTerminationTimeout(timeout, unit))
 
-      def awaitTermination(): G[Unit] = fk(self.awaitTermination())
+      def awaitTermination: G[Unit] = fk(self.awaitTermination)
     }
 }
 
 object GrpcServer {
+
+  def defaultServer[F[_]: Async](
+      port: Int,
+      configList: List[GrpcConfig]
+  ): Resource[F, GrpcServer[F]] =
+    Resource.eval(default[F](port, configList)).flatMap(s => serverResource(s).as(s))
 
   /**
    * Build a Resource that starts the given [[GrpcServer]] before use,
    * and shuts it down afterwards.
    */
   def serverResource[F[_]](S: GrpcServer[F])(implicit F: Async[F]): Resource[F, Unit] =
-    Resource.make(S.start())(_ => S.shutdown() >> S.awaitTermination())
+    Resource.make(S.start)(_ => S.shutdown >> S.awaitTermination)
 
   /**
    * Start the given server and keep it running forever.
@@ -100,7 +106,7 @@ object GrpcServer {
   def default[F[_]](port: Int, configList: List[GrpcConfig])(implicit
       F: Sync[F]
   ): F[GrpcServer[F]] =
-    F.delay(buildServer(ServerBuilder.forPort(port), configList)).map(fromServer[F])
+    buildServer[F](ServerBuilder.forPort(port), configList).map(fromServer[F])
 
   /**
    * Build a [[GrpcServer]] that uses the Netty network transport layer.
@@ -125,10 +131,10 @@ object GrpcServer {
   def fromServer[F[_]: Sync](server: Server): GrpcServer[F] =
     handlers.GrpcServerHandler[F].mapK(λ[GrpcServerOps[F, *] ~> F](_.run(server)))
 
-  private[this] def buildServer(
+  private[this] def buildServer[F[_]: Sync](
       bldr: ServerBuilder[SB] forSome { type SB <: ServerBuilder[SB] },
       configList: List[GrpcConfig]
-  ): Server = {
+  ): F[Server] = Sync[F].delay {
     configList
       .foldLeft(bldr)((bldr, cfg) => SBuilder(bldr)(cfg))
       .build()

@@ -17,7 +17,8 @@
 package higherkindness.mu.rpc
 package server.handlers
 
-import higherkindness.mu.rpc.common.{ConcurrentMonad, SC}
+import cats.effect.IO
+import higherkindness.mu.rpc.common.SC
 import higherkindness.mu.rpc.server.RpcServerTestSuite
 import io.grpc.{Server, ServerServiceDefinition}
 
@@ -30,13 +31,13 @@ class GrpcServerHandlerTests extends RpcServerTestSuite {
 
   import implicits._
 
-  val handler = GrpcServerHandler[ConcurrentMonad]
+  val handler = GrpcServerHandler[IO]
 
   "GrpcServer.Handler" should {
 
     "allow to start a GrpcServer" in {
 
-      runK(handler.start(), serverMock).attempt.unsafeRunSync().isRight shouldBe true
+      runK(handler.start, serverMock).attempt.unsafeRunSync().isRight shouldBe true
       (serverMock.start _: () => Server).verify().once()
 
     }
@@ -75,14 +76,14 @@ class GrpcServerHandlerTests extends RpcServerTestSuite {
 
     "allow to stop a started GrpcServer" in {
 
-      runK(handler.shutdown(), serverMock).attempt.unsafeRunSync().isRight shouldBe true
+      runK(handler.shutdown, serverMock).attempt.unsafeRunSync().isRight shouldBe true
       (serverMock.shutdown _: () => Server).verify().once()
 
     }
 
     "allow to stop immediately a started GrpcServer" in {
 
-      runK(handler.shutdownNow(), serverMock).attempt.unsafeRunSync().isRight shouldBe true
+      runK(handler.shutdownNow, serverMock).attempt.unsafeRunSync().isRight shouldBe true
       (serverMock.shutdownNow _: () => Server).verify().once()
 
     }
@@ -111,7 +112,7 @@ class GrpcServerHandlerTests extends RpcServerTestSuite {
 
     "allow stopping a started GrpcServer" in {
 
-      runK(handler.awaitTermination(), serverMock).unsafeRunSync() shouldBe unit
+      runK(handler.awaitTermination, serverMock).unsafeRunSync() shouldBe unit
       (serverMock.awaitTermination _: () => Unit).verify().once()
 
     }

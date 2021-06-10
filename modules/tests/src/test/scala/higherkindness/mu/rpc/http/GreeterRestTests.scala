@@ -27,13 +27,13 @@ import io.circe.syntax._
 import org.http4s._
 import org.http4s.circe._
 import org.http4s.client.UnexpectedStatus
-import org.http4s.client.blaze.BlazeClientBuilder
-import org.http4s.server.blaze._
+import org.http4s.blaze.client.BlazeClientBuilder
+import org.http4s.blaze.server._
 import org.scalatest._
 import org.http4s.implicits._
 import org.http4s.server.Router
 
-class GreeterRestTests extends RpcBaseTestSuite with BeforeAndAfter {
+class GreeterRestTests extends RpcBaseTestSuite with OneInstancePerTest with BeforeAndAfter {
 
   val Hostname = "localhost"
   val Port     = 8080
@@ -44,9 +44,7 @@ class GreeterRestTests extends RpcBaseTestSuite with BeforeAndAfter {
   val Fs2ServicePrefix   = "Fs2Greeter"
   val MonixServicePrefix = "MonixGreeter"
 
-  implicit val ec                   = scala.concurrent.ExecutionContext.Implicits.global
-  implicit val cs: ContextShift[IO] = IO.contextShift(ec)
-  implicit val timer: Timer[IO]     = IO.timer(ec)
+  implicit val ec = scala.concurrent.ExecutionContext.Implicits.global
 
   implicit val unaryHandlerIO = new UnaryGreeterHandler[IO]
   implicit val fs2HandlerIO   = new Fs2GreeterHandler[IO]
@@ -63,7 +61,7 @@ class GreeterRestTests extends RpcBaseTestSuite with BeforeAndAfter {
       ).orNotFound
     )
 
-  var serverTask: Fiber[IO, Nothing] = _
+  var serverTask: Fiber[IO, Throwable, Nothing] = _
 
   before {
     serverTask = server.resource.use(_ => IO.never).start.unsafeRunSync()
@@ -87,22 +85,28 @@ class GreeterRestTests extends RpcBaseTestSuite with BeforeAndAfter {
     }
 
     "return a 400 Bad Request for a malformed unary POST request" in {
-      val request     = Request[IO](Method.POST, serviceUri / UnaryServicePrefix / "sayHello")
+      val uri         = serviceUri / UnaryServicePrefix / "sayHello"
+      val request     = Request[IO](Method.POST, uri)
       val requestBody = "{"
       val response =
         BlazeClientBuilder[IO](ec).resource.use(_.expect[Json](request.withEntity(requestBody)))
       the[UnexpectedStatus] thrownBy response.unsafeRunSync() shouldBe UnexpectedStatus(
-        Status.BadRequest
+        Status.BadRequest,
+        Method.POST,
+        uri
       )
     }
 
     "return a 400 Bad Request for a malformed streaming POST request" in {
-      val request     = Request[IO](Method.POST, serviceUri / Fs2ServicePrefix / "sayHellos")
+      val uri         = serviceUri / Fs2ServicePrefix / "sayHellos"
+      val request     = Request[IO](Method.POST, uri)
       val requestBody = "{"
       val response =
         BlazeClientBuilder[IO](ec).resource.use(_.expect[Json](request.withEntity(requestBody)))
       the[UnexpectedStatus] thrownBy response.unsafeRunSync() shouldBe UnexpectedStatus(
-        Status.BadRequest
+        Status.BadRequest,
+        Method.POST,
+        uri
       )
     }
 

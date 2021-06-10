@@ -16,27 +16,22 @@
 
 package integrationtest.protobuf
 
-import integrationtest._
-import weather._
-import weather.GetForecastResponse.Weather.SUNNY
-import weather.RainEvent.EventType._
+import cats.effect.unsafe.implicits.global
+import cats.effect.{IO, Resource}
+import fs2._
 import higherkindness.mu.rpc._
 import higherkindness.mu.rpc.protocol.Empty
-
+import integrationtest._
+import integrationtest.protobuf.weather.GetForecastResponse.Weather.SUNNY
+import integrationtest.protobuf.weather.RainEvent.EventType._
+import integrationtest.protobuf.weather._
 import io.grpc.CallOptions
-import cats.effect.{ContextShift, IO, Resource}
-import fs2._
-
 import org.scalatest.flatspec.AnyFlatSpec
-
-import scala.concurrent.ExecutionContext
 
 class HaskellServerScalaClientSpec extends AnyFlatSpec with HaskellServerRunningInDocker {
 
   def serverPort: Int              = Constants.ProtobufPort
   def serverExecutableName: String = "protobuf-server"
-
-  implicit val CS: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
 
   val channelFor: ChannelFor = ChannelForAddress("localhost", serverPort)
 

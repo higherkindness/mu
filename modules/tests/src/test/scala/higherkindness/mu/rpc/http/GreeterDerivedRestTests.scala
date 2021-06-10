@@ -23,19 +23,17 @@ import higherkindness.mu.http.protocol.{HttpServer, RouteMap}
 import higherkindness.mu.rpc.common.RpcBaseTestSuite
 import io.circe.generic.auto._
 import org.http4s._
-import org.http4s.client.blaze.BlazeClientBuilder
-import org.http4s.server.blaze._
+import org.http4s.blaze.client.BlazeClientBuilder
+import org.http4s.blaze.server._
 import org.scalatest._
 
-class GreeterDerivedRestTests extends RpcBaseTestSuite with BeforeAndAfter {
+class GreeterDerivedRestTests extends RpcBaseTestSuite with OneInstancePerTest with BeforeAndAfter {
 
   val host            = "localhost"
   val port            = 8080
   val serviceUri: Uri = Uri.unsafeFromString(s"http://$host:$port")
 
-  implicit val ec                   = scala.concurrent.ExecutionContext.Implicits.global
-  implicit val cs: ContextShift[IO] = IO.contextShift(ec)
-  implicit val timer: Timer[IO]     = IO.timer(ec)
+  implicit val ec = scala.concurrent.ExecutionContext.Implicits.global
 
   implicit val unaryHandlerIO = new UnaryGreeterHandler[IO]
   implicit val fs2HandlerIO   = new Fs2GreeterHandler[IO]
@@ -45,7 +43,7 @@ class GreeterDerivedRestTests extends RpcBaseTestSuite with BeforeAndAfter {
 
   val server: BlazeServerBuilder[IO] = HttpServer.bind(port, host, unaryRoute, fs2Route)
 
-  var serverTask: Fiber[IO, Nothing] = _
+  var serverTask: Fiber[IO, Throwable, Nothing] = _
   before {
     serverTask = server.resource.use(_ => IO.never).start.unsafeRunSync()
   }

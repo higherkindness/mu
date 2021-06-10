@@ -18,7 +18,6 @@ package higherkindness.mu.rpc.benchmarks
 package shared
 
 import cats.effect._
-import cats.instances.list._
 import cats.syntax.traverse._
 import higherkindness.mu.rpc._
 import higherkindness.mu.rpc.channel.ManagedChannelInterpreter
@@ -39,9 +38,8 @@ trait ServerRuntime {
 
   val EC: ExecutionContext = ExecutionContext.Implicits.global
 
-  implicit val logger: Logger[IO]        = Slf4jLogger.getLogger[IO]
-  implicit lazy val timer: Timer[IO]     = IO.timer(EC)
-  implicit lazy val cs: ContextShift[IO] = IO.contextShift(EC)
+  implicit val logger: Logger[IO]                    = Slf4jLogger.getLogger[IO]
+  protected implicit val ioRuntime: unsafe.IORuntime = unsafe.IORuntime.global
 
   implicit val persistenceService: PersistenceService[IO] = PersistenceService[IO]
 
@@ -50,37 +48,50 @@ trait ServerRuntime {
   implicit private val avroWithSchemaHandler: AvroWithSchemaHandler[IO] =
     new AvroWithSchemaHandler[IO]
 
-  implicit lazy val grpcConfigs: IO[List[GrpcConfig]] = List(
+  def grpcConfigs: Resource[IO, List[GrpcConfig]] = List(
     PersonServicePB.bindService[IO].map(AddService),
     PersonServiceAvro.bindService[IO].map(AddService),
     PersonServiceAvroWithSchema.bindService[IO].map(AddService)
-  ).sequence[IO, GrpcConfig]
+  ).sequence
 
-  implicit lazy val clientChannel =
+  implicit lazy val clientChannel: ManagedChannel =
     new ManagedChannelInterpreter[IO](
       ChannelForAddress("localhost", grpcPort),
       List(UsePlaintext())
     ).build.unsafeRunSync()
 
-  implicit lazy val grpcServer: GrpcServer[IO] =
-    grpcConfigs.flatMap(conf => GrpcServer.default[IO](grpcPort, conf)).unsafeRunSync()
+  def grpcServer: Resource[IO, GrpcServer[IO]] =
+    grpcConfigs.evalMap(conf => GrpcServer.default[IO](grpcPort, conf))
 
-  def startServer(implicit server: GrpcServer[IO]): Unit =
-    (for {
-      _ <- logger.info("Starting server..")
-      _ <- server.start()
-      _ <- logger.info("Server started..")
-    } yield ()).unsafeRunSync()
+  private var server: GrpcServer[IO]   = null
+  private var shutdownServer: IO[Unit] = IO.unit
 
-  def tearDown(implicit server: GrpcServer[IO], channel: ManagedChannel): Unit =
+  def startServer(): Unit = {
+    val allocated = grpcServer
+      .evalTap { server =>
+        for {
+          _ <- logger.info("Starting server..")
+          _ <- server.start
+          _ <- logger.info("Server started..")
+        } yield ()
+      }
+      .allocated
+      .unsafeRunSync()
+    this.server = server
+    shutdownServer = allocated._2
+
+  }
+
+  def tearDown()(implicit channel: ManagedChannel): Unit =
     (for {
       _ <- logger.info("Stopping client..")
       _ <- IO(channel.shutdownNow())
       _ <- IO(channel.awaitTermination(1, TimeUnit.SECONDS))
       _ <- logger.info("Client Stopped..")
       _ <- logger.info("Stopping server..")
-      _ <- server.shutdownNow()
+      _ <- server.shutdownNow
       _ <- server.awaitTerminationTimeout(1, TimeUnit.SECONDS)
       _ <- logger.info("Server Stopped..")
+      _ <- shutdownServer
     } yield ()).unsafeRunSync()
 }

@@ -16,71 +16,61 @@
 
 package higherkindness.mu.kafka
 
+import cats.Functor
 import cats.effect._
 import fs2._
-import fs2.concurrent.Queue
+import cats.effect.std.Queue
 import fs2.kafka._
 import higherkindness.mu.format.Serialiser
 import org.typelevel.log4cats.Logger
 import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 object ProducerStream {
-  def pipe[F[_], A](
+  def pipe[F[_]: Async, A](
       topic: String,
       settings: fs2.kafka.ProducerSettings[F, String, Array[Byte]]
   )(implicit
-      contextShift: ContextShift[F],
-      concurrentEffect: ConcurrentEffect[F],
       encoder: Serialiser[A]
   ): fs2.Stream[F, Option[A]] => fs2.Stream[F, ByteArrayProducerResult] =
     as =>
       for {
         implicit0(logger: Logger[F]) <- fs2.Stream.eval(Slf4jLogger.create[F])
-        s                            <- apply(fs2.kafka.KafkaProducer.pipe(settings))(topic, as)
+        s                            <- apply(fs2.kafka.KafkaProducer.pipe(settings))(topic, as.unNoneTerminate)
       } yield s
 
-  def apply[F[_], A](
+  def apply[F[_]: Async, A](
       topic: String,
       queue: Queue[F, Option[A]],
       settings: fs2.kafka.ProducerSettings[F, String, Array[Byte]]
   )(implicit
-      contextShift: ContextShift[F],
-      concurrentEffect: ConcurrentEffect[F],
       encoder: Serialiser[A]
   ): Stream[F, ByteArrayProducerResult] =
     for {
       implicit0(logger: Logger[F]) <- fs2.Stream.eval(Slf4jLogger.create[F])
-      s                            <- apply(fs2.kafka.KafkaProducer.pipe(settings))(topic, queue.dequeue)
+      s <- apply(fs2.kafka.KafkaProducer.pipe(settings))(
+        topic,
+        Stream.fromQueueNoneTerminated(queue)
+      )
     } yield s
 
-  private[kafka] def apply[F[_]: Logger, A](
+  private[kafka] def apply[F[_]: Functor: Logger, A](
       publishToKafka: PublishToKafka[F]
-  )(topic: String, stream: Stream[F, Option[A]])(implicit
-      concurrentEffect: ConcurrentEffect[F],
-      sync: Sync[F],
+  )(topic: String, stream: Stream[F, A])(implicit
       serialiser: Serialiser[A]
   ): Stream[F, ByteArrayProducerResult] =
     stream
-      .flatMap(a => Stream.eval(Logger[F].info(s"Dequeued $a")).map(_ => a))
-      .unNoneTerminate // idiomatic way to terminate a fs2 stream
-      .evalMap(a =>
-        concurrentEffect.delay(
-          ProducerRecords
-            .one(
-              ProducerRecord(topic, "dummy-key", serialiser.serialise(a))
-            ) // TODO key generation and propagation
-        )
+      .evalTap(a => Logger[F].info(s"Dequeued $a"))
+      .map(a =>
+        ProducerRecords
+          .one(
+            ProducerRecord(topic, "dummy-key", serialiser.serialise(a))
+          ) // TODO key generation and propagation
       )
-      .covary[F]
       .through(publishToKafka)
-      .flatMap(result =>
-        Stream
-          .eval(
-            Logger[F].info(
-              result.records.head
-                .fold("Error: ProducerResult contained empty records.")(a => s"Published $a")
-            )
-          )
-          .flatMap(_ => Stream.eval(sync.delay(result)))
+      .evalTap(result =>
+        Logger[F].info(
+          result.records.head
+            .fold("Error: ProducerResult contained empty records.")(a => s"Published $a")
+        )
       )
 }

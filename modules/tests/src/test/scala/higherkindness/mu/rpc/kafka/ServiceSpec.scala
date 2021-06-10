@@ -16,47 +16,41 @@
 
 package higherkindness.mu.rpc.kafka
 
-import cats.effect.{ConcurrentEffect, ContextShift, IO, Sync}
+import cats.effect.unsafe.implicits.global
+import cats.effect.{Async, Concurrent, IO, Sync}
 import cats.syntax.applicative._
 import fs2.kafka._
+import higherkindness.mu.rpc.kafka.kafkaManagementService._
 import higherkindness.mu.rpc.protocol.Empty
 import higherkindness.mu.rpc.testing.servers.withServerChannel
-import net.manub.embeddedkafka.{EmbeddedKafka, EmbeddedKafkaConfig}
-import org.apache.kafka.clients.admin.AdminClientConfig
+import io.github.embeddedkafka.{EmbeddedKafka, EmbeddedKafkaConfig}
 import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
 import org.scalatest._
-
-import scala.concurrent.ExecutionContext
-
-import kafkaManagementService._
 import org.scalatest.funsuite.AnyFunSuite
 import org.scalatest.matchers.should.Matchers
 
 class ServiceSpec extends AnyFunSuite with Matchers with OneInstancePerTest with EmbeddedKafka {
-  implicit val cs: ContextShift[IO] = IO.contextShift(ExecutionContext.Implicits.global)
 
-  def adminClientSettings[F[_]: Sync](config: EmbeddedKafkaConfig): AdminClientSettings[F] =
-    AdminClientSettings[F].withProperties(
-      Map(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> s"localhost:${config.kafkaPort}")
-    )
+  def adminClientSettings(config: EmbeddedKafkaConfig): AdminClientSettings =
+    AdminClientSettings(s"localhost:${config.kafkaPort}")
 
-  def withKafka[F[_]: Sync, A](f: AdminClientSettings[F] => A): A =
+  def withKafka[F[_]: Sync, A](f: AdminClientSettings => A): A =
     withRunningKafkaOnFoundPort(
       EmbeddedKafkaConfig()
-    )(adminClientSettings[F] _ andThen f)
+    )(adminClientSettings _ andThen f)
 
-  def withClient[F[_]: ContextShift: ConcurrentEffect, A](
-      settings: AdminClientSettings[F]
+  def withClient[F[_]: Async, A](
+      settings: AdminClientSettings
   )(f: KafkaManagement[F] => F[A]): F[A] =
     (for {
       km            <- KafkaManagement.buildInstance[F](settings)
-      serverChannel <- withServerChannel(KafkaManagement.bindService[F](ConcurrentEffect[F], km))
+      serverChannel <- withServerChannel(KafkaManagement.bindService[F](Concurrent[F], km))
       client        <- KafkaManagement.clientFromChannel[F](Sync[F].delay(serverChannel.channel))
     } yield client).use(f)
 
   test("create/list/delete topic") {
-    withKafka { settings: AdminClientSettings[IO] =>
-      withClient(settings) { client =>
+    withKafka[IO, Unit] { settings: AdminClientSettings =>
+      withClient[IO, Unit](settings) { client =>
         for {
           topicName  <- "topic".pure[IO]
           create     <- client.createTopic(CreateTopicRequest(topicName, 2, 1)).attempt
@@ -73,8 +67,8 @@ class ServiceSpec extends AnyFunSuite with Matchers with OneInstancePerTest with
   }
 
   test("create/list/delete topics") {
-    withKafka { settings: AdminClientSettings[IO] =>
-      withClient(settings) { client =>
+    withKafka[IO, Unit] { settings: AdminClientSettings =>
+      withClient[IO, Unit](settings) { client =>
         for {
           topicNames <- List("topic1", "topic2").pure[IO]
           creates <-
@@ -96,8 +90,8 @@ class ServiceSpec extends AnyFunSuite with Matchers with OneInstancePerTest with
   }
 
   test("create/create partitions/describe topic") {
-    withKafka { settings: AdminClientSettings[IO] =>
-      withClient(settings) { client =>
+    withKafka[IO, Unit] { settings: AdminClientSettings =>
+      withClient[IO, Unit](settings) { client =>
         for {
           topicName <- "topic".pure[IO]
           create    <- client.createTopic(CreateTopicRequest(topicName, 2, 1)).attempt
@@ -128,8 +122,8 @@ class ServiceSpec extends AnyFunSuite with Matchers with OneInstancePerTest with
   }
 
   test("describe cluster") {
-    withKafka { settings: AdminClientSettings[IO] =>
-      withClient(settings) { client =>
+    withKafka[IO, Unit] { settings: AdminClientSettings =>
+      withClient[IO, Unit](settings) { client =>
         for {
           cluster <- client.describeCluster(Empty).attempt
           _       <- IO(assert(cluster.isRight))
@@ -140,8 +134,8 @@ class ServiceSpec extends AnyFunSuite with Matchers with OneInstancePerTest with
   }
 
   test("alter/describe configs") {
-    withKafka { settings: AdminClientSettings[IO] =>
-      withClient(settings) { client =>
+    withKafka[IO, Unit] { settings: AdminClientSettings =>
+      withClient[IO, Unit](settings) { client =>
         for {
           topicName <- "topic".pure[IO]
           create    <- client.createTopic(CreateTopicRequest(topicName, 2, 1)).attempt
@@ -178,7 +172,7 @@ class ServiceSpec extends AnyFunSuite with Matchers with OneInstancePerTest with
   }
 
   test("describe/list/list offsets consumer groups") {
-    withKafka { settings: AdminClientSettings[IO] =>
+    withKafka[IO, Unit] { settings: AdminClientSettings =>
       val topicName                                       = "topic"
       implicit val stringSerializer: StringSerializer     = new StringSerializer
       implicit val stringDeserializer: StringDeserializer = new StringDeserializer
@@ -186,7 +180,7 @@ class ServiceSpec extends AnyFunSuite with Matchers with OneInstancePerTest with
       publishToKafka(topicName, (0 until 100).map(n => s"key-$n" -> s"value->$n"))
       consumeFirstMessageFrom(topicName, autoCommit = true)
 
-      withClient(settings) { client =>
+      withClient[IO, Unit](settings) { client =>
         for {
           groups <- client.listConsumerGroups(Empty).attempt
           _      <- IO(assert(groups.isRight))

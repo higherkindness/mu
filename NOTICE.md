@@ -4,6 +4,6 @@
 
 mu-scala
 
-Copyright (c) 2017-2020 47 Degrees Open Source. All rights reserved.
+Copyright (c) 2017-2021 47 Degrees Open Source. All rights reserved.
 
 Licensed under Apache-2.0. See [LICENSE](LICENSE.md) for terms.

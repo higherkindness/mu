@@ -16,13 +16,14 @@
 
 package higherkindness.mu.kafka.it.example
 
-import cats.effect.{ContextShift, IO, Timer}
+import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import com.typesafe.scalalogging.LazyLogging
+import fs2.kafka.{AutoOffsetReset, ConsumerSettings, ProducerSettings}
 import fs2.{Pipe, Stream}
-import fs2.kafka.{ConsumerSettings, ProducerSettings}
-import fs2.kafka.AutoOffsetReset
 import higherkindness.mu.kafka.config.KafkaBrokers
-import net.manub.embeddedkafka.{EmbeddedKafka, EmbeddedKafkaConfig}
+import higherkindness.mu.kafka.{ConsumerStream, ProducerStream}
+import io.github.embeddedkafka.{EmbeddedKafka, EmbeddedKafkaConfig}
 import org.scalatest.concurrent.PatienceConfiguration.Timeout
 import org.scalatest.concurrent.{Futures, ScalaFutures}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -30,10 +31,8 @@ import org.scalatest.matchers.should.Matchers
 import org.scalatest.time.Seconds
 import org.scalatest.{time, OneInstancePerTest}
 
-import scala.concurrent.ExecutionContext.global
 import scala.concurrent.Promise
 import scala.util.Try
-import higherkindness.mu.kafka.{ConsumerStream, ProducerStream}
 
 class MuKafkaServiceSpec
     extends AnyFlatSpec
@@ -47,8 +46,6 @@ class MuKafkaServiceSpec
   behavior of "mu Kafka consumer And producer."
 
   // dependencies for mu kafka consumer & producer
-  implicit val cs: ContextShift[IO] = IO.contextShift(global)
-  implicit val timer: Timer[IO]     = IO.timer(global)
   import higherkindness.mu.format.AvroWithSchema._
 
   // kafka config
@@ -88,13 +85,13 @@ class MuKafkaServiceSpec
         .through(ProducerStream.pipe(topic, producerSettings))
         .compile
         .drain
-        .unsafeRunAsyncAndForget()
+        .unsafeRunAndForget()
 
       ConsumerStream[IO, UserAdded](topic, consumerSettings)
         .through(putConsumeMessageIntoFuture)
         .compile
         .drain
-        .unsafeRunAsyncAndForget()
+        .unsafeRunAndForget()
 
       whenReady(consumed.future, Timeout(time.Span(5, Seconds)))(userAdded =>
         userAdded shouldBe userAddedMessage

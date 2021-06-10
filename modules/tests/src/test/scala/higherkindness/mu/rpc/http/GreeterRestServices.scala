@@ -17,15 +17,14 @@
 package higherkindness.mu.rpc.http
 
 import cats.effect._
-import cats.syntax.flatMap._
-import cats.syntax.functor._
+import cats.syntax.all._
 import io.circe.syntax._
 import higherkindness.mu.http.implicits._
 import org.http4s._
 import org.http4s.circe._
 import org.http4s.dsl.Http4sDsl
 
-class UnaryGreeterRestService[F[_]: Sync](implicit
+class UnaryGreeterRestService[F[_]: Concurrent](implicit
     handler: UnaryGreeter[F],
     decoderHelloRequest: io.circe.Decoder[HelloRequest],
     encoderHelloResponse: io.circe.Encoder[HelloResponse]
@@ -48,7 +47,7 @@ class UnaryGreeterRestService[F[_]: Sync](implicit
     }
 }
 
-class Fs2GreeterRestService[F[_]: Sync](implicit
+class Fs2GreeterRestService[F[_]: Concurrent](implicit
     handler: Fs2Greeter[F],
     decoderHelloRequest: io.circe.Decoder[HelloRequest],
     encoderHelloResponse: io.circe.Encoder[HelloResponse]

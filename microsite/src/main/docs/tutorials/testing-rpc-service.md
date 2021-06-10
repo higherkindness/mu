@@ -70,15 +70,16 @@ In our test we'll use cats-effect `IO` as our concrete effect monad.
 We need to provide a couple of implicits to make that work:
 
 ```scala mdoc:silent
-import cats.effect.{IO, ContextShift, Timer}
+import cats.effect.IO
 import scala.concurrent.ExecutionContext
 
 trait CatsEffectImplicits {
+  import cats.effect.unsafe
 
   val EC: ExecutionContext = ExecutionContext.global
 
-  implicit val timer: Timer[IO]     = IO.timer(EC)
-  implicit val cs: ContextShift[IO] = IO.contextShift(EC)
+  implicit val ioRuntime: unsafe.IORuntime = unsafe.IORuntime.global
+
 
 }
 ```

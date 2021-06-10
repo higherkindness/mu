@@ -16,7 +16,8 @@
 
 package higherkindness.mu.kafka
 
-import cats.effect.{ConcurrentEffect, ContextShift, Sync, Timer}
+import cats.Monad
+import cats.effect.Async
 import fs2.Stream
 import fs2.kafka.{ConsumerSettings, KafkaConsumer}
 import higherkindness.mu.format.Deserialiser
@@ -25,22 +26,17 @@ import org.typelevel.log4cats.slf4j.Slf4jLogger
 
 object ConsumerStream {
 
-  def apply[F[_]: Sync, A](topic: String, settings: ConsumerSettings[F, String, Array[Byte]])(
-      implicit
-      contextShift: ContextShift[F],
-      concurrentEffect: ConcurrentEffect[F],
-      timer: Timer[F],
-      decoder: Deserialiser[A]
+  def apply[F[_]: Async, A](topic: String, settings: ConsumerSettings[F, String, Array[Byte]])(
+      implicit decoder: Deserialiser[A]
   ): Stream[F, A] =
     for {
       implicit0(logger: Logger[F]) <- fs2.Stream.eval(Slf4jLogger.create[F])
       s                            <- apply(fs2.kafka.KafkaConsumer.stream(settings))(topic)
     } yield s
 
-  private[kafka] def apply[F[_], A](
+  private[kafka] def apply[F[_]: Monad, A](
       kafkaConsumerStream: Stream[F, KafkaConsumer[F, String, Array[Byte]]]
   )(topic: String)(implicit
-      concurrentEffect: ConcurrentEffect[F],
       decoder: Deserialiser[A],
       logger: Logger[F]
   ): Stream[F, A] =
@@ -48,12 +44,8 @@ object ConsumerStream {
       .evalTap(_.subscribeTo(topic))
       .flatMap(
         _.stream
-          .flatMap { message =>
-            val a = decoder.deserialise(message.record.value)
-            for {
-              _ <- fs2.Stream.eval(logger.info(a.toString))
-            } yield a
-          }
+          .map(message => decoder.deserialise(message.record.value))
+          .evalTap(a => logger.info(a.toString))
       )
 
 }

@@ -18,7 +18,6 @@ package higherkindness.mu.rpc
 package server
 
 import java.util.concurrent.{Executor, TimeUnit}
-
 import cats.effect.Sync
 import cats.syntax.functor._
 import higherkindness.mu.rpc.common.{RpcBaseTestSuite, SC}
@@ -31,11 +30,12 @@ import io.netty.channel.ChannelOption
 import io.netty.channel.local.LocalServerChannel
 import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.handler.ssl.SslContext
+import org.scalatest.OneInstancePerTest
 
 import scala.jdk.CollectionConverters._
 import scala.concurrent.duration.TimeUnit
 
-trait RpcServerTestSuite extends RpcBaseTestSuite {
+trait RpcServerTestSuite extends RpcBaseTestSuite with OneInstancePerTest {
 
   trait DummyData {
 
@@ -129,7 +129,7 @@ trait RpcServerTestSuite extends RpcBaseTestSuite {
     def grpcServerHandlerTests[F[_]](implicit F: Sync[F]): GrpcServer[F] = {
       new GrpcServer[F] {
 
-        def start(): F[Unit] = F.pure(serverMock.start()).void
+        def start: F[Unit] = F.pure(serverMock.start).void
 
         def getPort: F[Int] = F.pure(serverMock.getPort)
 
@@ -142,9 +142,9 @@ trait RpcServerTestSuite extends RpcBaseTestSuite {
         def getMutableServices: F[List[ServerServiceDefinition]] =
           F.pure(serverMock.getMutableServices.asScala.toList)
 
-        def shutdown(): F[Unit] = F.pure(serverMock.shutdown()).void
+        def shutdown: F[Unit] = F.pure(serverMock.shutdown()).void
 
-        def shutdownNow(): F[Unit] = F.pure(serverMock.shutdownNow()).void
+        def shutdownNow: F[Unit] = F.pure(serverMock.shutdownNow()).void
 
         def isShutdown: F[Boolean] = F.pure(serverMock.isShutdown)
 
@@ -153,7 +153,7 @@ trait RpcServerTestSuite extends RpcBaseTestSuite {
         def awaitTerminationTimeout(timeout: Long, unit: TimeUnit): F[Boolean] =
           F.pure(serverMock.awaitTermination(timeout, unit))
 
-        def awaitTermination(): F[Unit] = F.pure(serverMock.awaitTermination())
+        def awaitTermination: F[Unit] = F.pure(serverMock.awaitTermination())
 
       }
     }

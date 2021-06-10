@@ -17,10 +17,10 @@
 package higherkindness.mu.rpc.internal.metrics
 
 import cats.effect.IO
-import cats.effect.concurrent.Ref
 import cats.syntax.apply._
 import higherkindness.mu.rpc.internal.interceptors.GrpcMethodInfo
 import io.grpc.Status
+import cats.effect.Ref
 
 case class MetricsOpsRegister(
     increaseActiveCallsReg: Ref[IO, List[(GrpcMethodInfo, Option[String])]],

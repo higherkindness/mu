@@ -29,7 +29,7 @@ import scala.concurrent.duration.TimeUnit
 private[handlers] class GrpcServerHandler[F[_]: Sync] private[GrpcServerHandler] ()
     extends GrpcServer[GrpcServerOps[F, *]] {
 
-  def start(): GrpcServerOps[F, Unit] =
+  def start: GrpcServerOps[F, Unit] =
     captureWithServer(_.start()).void
 
   def getPort: GrpcServerOps[F, Int] = captureWithServer(_.getPort)
@@ -43,10 +43,10 @@ private[handlers] class GrpcServerHandler[F[_]: Sync] private[GrpcServerHandler]
   def getMutableServices: GrpcServerOps[F, List[ServerServiceDefinition]] =
     captureWithServer(_.getMutableServices.asScala.toList)
 
-  def shutdown(): GrpcServerOps[F, Unit] =
+  def shutdown: GrpcServerOps[F, Unit] =
     captureWithServer(_.shutdown()).void
 
-  def shutdownNow(): GrpcServerOps[F, Unit] =
+  def shutdownNow: GrpcServerOps[F, Unit] =
     captureWithServer(_.shutdownNow()).void
 
   def isShutdown: GrpcServerOps[F, Boolean] = captureWithServer(_.isShutdown)
@@ -56,7 +56,7 @@ private[handlers] class GrpcServerHandler[F[_]: Sync] private[GrpcServerHandler]
   def awaitTerminationTimeout(timeout: Long, unit: TimeUnit): GrpcServerOps[F, Boolean] =
     captureWithServer(_.awaitTermination(timeout, unit))
 
-  def awaitTermination(): GrpcServerOps[F, Unit] = captureWithServer(_.awaitTermination())
+  def awaitTermination: GrpcServerOps[F, Unit] = captureWithServer(_.awaitTermination())
 
   private[this] def captureWithServer[A](f: Server => A): GrpcServerOps[F, A] =
     Kleisli(s => Sync[F].delay(f(s)))
