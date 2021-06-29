@@ -19,22 +19,20 @@ object ProjectPlugin extends AutoPlugin {
       val catsEffect: String            = "3.1.1"
       val circe: String                 = "0.14.1"
       val dockerItScala                 = "0.9.9"
-      val dropwizard: String            = "4.2.0"
-      val embeddedKafka: String         = "2.8.0"
-      val enumeratum: String            = "1.6.1"
+      val dropwizard: String            = "4.2.2"
+      val enumeratum: String            = "1.7.0"
       val fs2: String                   = "3.0.4"
       val fs2Grpc: String               = "2.1.2"
-      val fs2Kafka: String              = "2.1.0"
-      val grpc: String                  = "1.38.0"
+      val grpc: String                  = "1.38.1"
       val http4s: String                = "0.23.0-RC1"
       val jawnFs2: String               = "2.0.0"
       val kindProjector: String         = "0.13.0"
       val log4cats: String              = "2.1.1"
       val log4s: String                 = "1.10.0"
       val logback: String               = "1.2.3"
-      val scalalogging: String          = "3.9.3" // used in tests
+      val scalalogging: String          = "3.9.4" // used in tests
       val natchez: String               = "0.1.4"
-      val nettySSL: String              = "2.0.39.Final"
+      val nettySSL: String              = "2.0.40.Final"
       val paradise: String              = "2.1.1"
       val pbdirect: String              = "0.6.1"
       val prometheus: String            = "0.10.0"
@@ -45,7 +43,7 @@ object ProjectPlugin extends AutoPlugin {
       val scalamock: String             = "5.1.0"
       val scalatest: String             = "3.2.9"
       val scalatestplusScheck: String   = "3.2.2.0"
-      val slf4j: String                 = "1.7.30"
+      val slf4j: String                 = "1.7.31"
     }
 
     lazy val rpcServiceSettings: Seq[Def.Setting[_]] = Seq(
@@ -154,19 +152,6 @@ object ProjectPlugin extends AutoPlugin {
       )
     )
 
-    lazy val kafkaSettings: Seq[Def.Setting[_]] = Seq(
-      libraryDependencies ++= Seq(
-        "com.github.fd4s"            %% "fs2-kafka"       % V.fs2Kafka,
-        "org.typelevel"              %% "log4cats-slf4j"  % V.log4cats,
-        "org.typelevel"              %% "log4cats-core"   % V.log4cats,
-        "com.sksamuel.avro4s"        %% "avro4s-core"     % V.avro4s,
-        "ch.qos.logback"              % "logback-classic" % V.logback,
-        "io.github.embeddedkafka"    %% "embedded-kafka"  % V.embeddedKafka % Test,
-        "com.typesafe.scala-logging" %% "scala-logging"   % V.scalalogging  % Test,
-        compilerPlugin("com.olegpy" %% "better-monadic-for" % V.betterMonadicFor)
-      )
-    )
-
     lazy val benchmarksSettings: Seq[Def.Setting[_]] = Seq(
       Compile / unmanagedSourceDirectories += {
         baseDirectory.value.getParentFile / "shared" / "src" / "main" / "scala"
@@ -225,18 +210,17 @@ object ProjectPlugin extends AutoPlugin {
     lazy val testSettings = Seq(
       publishArtifact := false,
       libraryDependencies ++= Seq(
-        "io.grpc"                  % "grpc-netty"                      % V.grpc                  % Test,
-        "io.netty"                 % "netty-tcnative-boringssl-static" % V.nettySSL              % Test,
-        "org.scalatest"           %% "scalatest"                       % V.scalatest             % Test,
-        "org.scalatestplus"       %% "scalacheck-1-14"                 % V.scalatestplusScheck   % Test,
-        "org.scalamock"           %% "scalamock"                       % V.scalamock             % Test,
-        "com.47deg"               %% "scalacheck-toolbox-datetime"     % V.scalacheckToolbox     % Test,
-        "org.scala-lang.modules"  %% "scala-collection-compat"         % V.scalaCollectionCompat % Test,
-        "io.github.embeddedkafka" %% "embedded-kafka"                  % V.embeddedKafka         % Test,
-        "org.http4s"              %% "http4s-blaze-client"             % V.http4s                % Test,
-        "io.circe"                %% "circe-generic"                   % V.circe                 % Test,
-        "ch.qos.logback"           % "logback-classic"                 % V.logback               % Test,
-        "org.slf4j"                % "slf4j-nop"                       % V.slf4j                 % Test
+        "io.grpc"                 % "grpc-netty"                      % V.grpc                  % Test,
+        "io.netty"                % "netty-tcnative-boringssl-static" % V.nettySSL              % Test,
+        "org.scalatest"          %% "scalatest"                       % V.scalatest             % Test,
+        "org.scalatestplus"      %% "scalacheck-1-14"                 % V.scalatestplusScheck   % Test,
+        "org.scalamock"          %% "scalamock"                       % V.scalamock             % Test,
+        "com.47deg"              %% "scalacheck-toolbox-datetime"     % V.scalacheckToolbox     % Test,
+        "org.scala-lang.modules" %% "scala-collection-compat"         % V.scalaCollectionCompat % Test,
+        "org.http4s"             %% "http4s-blaze-client"             % V.http4s                % Test,
+        "io.circe"               %% "circe-generic"                   % V.circe                 % Test,
+        "ch.qos.logback"          % "logback-classic"                 % V.logback               % Test,
+        "org.slf4j"               % "slf4j-nop"                       % V.slf4j                 % Test
       )
     )
 

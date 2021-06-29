@@ -119,17 +119,6 @@ lazy val http = project
   .settings(moduleName := "mu-rpc-http")
   .settings(httpSettings)
 
-///////////////
-//// KAFKA ////
-///////////////
-
-lazy val kafka = project
-  .in(file("modules/kafka"))
-  .dependsOn(`rpc-service`)
-  .settings(moduleName := "mu-rpc-kafka")
-  .settings(kafkaSettings)
-  .settings(testSettings)
-
 ////////////////////
 //// BENCHMARKS ////
 ////////////////////
@@ -187,7 +176,6 @@ lazy val coreModules: Seq[ProjectReference] = Seq(
   testing,
   `netty-ssl`,
   http,
-  kafka,
   `health-check`,
   `benchmarks-vnext`
 )
