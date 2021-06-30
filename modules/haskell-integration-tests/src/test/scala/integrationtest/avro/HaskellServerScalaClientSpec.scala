@@ -16,25 +16,20 @@
 
 package integrationtest.avro
 
-import integrationtest._
-import weather._
-import weather.GetForecastResponse.Weather.SUNNY
+import cats.effect.unsafe.implicits.global
+import cats.effect.{IO, Resource}
 import higherkindness.mu.rpc._
 import higherkindness.mu.rpc.protocol.Empty
-
+import integrationtest._
+import integrationtest.avro.weather.GetForecastResponse.Weather.SUNNY
+import integrationtest.avro.weather._
 import io.grpc.CallOptions
-import cats.effect.{ContextShift, IO, Resource}
-
 import org.scalatest.flatspec.AnyFlatSpec
-
-import scala.concurrent.ExecutionContext
 
 class HaskellServerScalaClientSpec extends AnyFlatSpec with HaskellServerRunningInDocker {
 
   def serverPort: Int              = Constants.AvroPort
   def serverExecutableName: String = "avro-server"
-
-  implicit val CS: ContextShift[IO] = IO.contextShift(ExecutionContext.global)
 
   val channelFor: ChannelFor = ChannelForAddress("localhost", serverPort)
 

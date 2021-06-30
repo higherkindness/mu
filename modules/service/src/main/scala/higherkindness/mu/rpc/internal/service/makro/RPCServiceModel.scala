@@ -143,8 +143,7 @@ class RPCServiceModel[C <: Context](val c: C) {
     private val serverCallDescriptorsAndHandlers: List[Tree] =
       rpcRequests.map(_.descriptorAndHandler)
 
-    val ceImplicit: Tree        = q"CE: _root_.cats.effect.ConcurrentEffect[$F]"
-    val csImplicit: Tree        = q"CS: _root_.cats.effect.ContextShift[$F]"
+    val ceImplicit: Tree        = q"CE: _root_.cats.effect.Async[$F]"
     val schedulerImplicit: Tree = q"S: _root_.monix.execution.Scheduler"
 
     val bindImplicits: List[Tree] = ceImplicit :: q"algebra: $serviceName[$F]" :: rpcRequests
@@ -152,17 +151,19 @@ class RPCServiceModel[C <: Context](val c: C) {
       .map(_ => schedulerImplicit)
       .toList
 
-    val classImplicits: List[Tree] = ceImplicit :: csImplicit :: rpcRequests
+    val classImplicits: List[Tree] = ceImplicit :: rpcRequests
       .find(_.operation.isMonixObservable)
       .map(_ => schedulerImplicit)
       .toList
 
     val bindService: DefDef = q"""
-      def bindService[$F_](implicit ..$bindImplicits): $F[_root_.io.grpc.ServerServiceDefinition] =
-        _root_.higherkindness.mu.rpc.internal.service.GRPCServiceDefBuilder.build[$F](
-          ${lit(fullServiceName)},
-          ..$serverCallDescriptorsAndHandlers
-        )
+      def bindService[$F_](implicit ..$bindImplicits): _root_.cats.effect.Resource[$F, _root_.io.grpc.ServerServiceDefinition] =
+        _root_.cats.effect.std.Dispatcher.apply[$F](CE).evalMap { disp =>
+          _root_.higherkindness.mu.rpc.internal.service.GRPCServiceDefBuilder.build[$F](
+            ${lit(fullServiceName)},
+            ..${serverCallDescriptorsAndHandlers}
+          )
+        }
       """
 
     private val serverCallDescriptorsAndTracingHandlers: List[Tree] =
@@ -176,11 +177,13 @@ class RPCServiceModel[C <: Context](val c: C) {
 
     val bindTracingService: DefDef = q"""
       def bindTracingService[$F_](entrypoint: _root_.natchez.EntryPoint[$F])
-                                 (implicit ..$bindTracingServiceImplicits): $F[_root_.io.grpc.ServerServiceDefinition] =
-        _root_.higherkindness.mu.rpc.internal.service.GRPCServiceDefBuilder.build[$F](
-          ${lit(fullServiceName)},
-          ..$serverCallDescriptorsAndTracingHandlers
-        )
+                                 (implicit ..$bindTracingServiceImplicits): _root_.cats.effect.Resource[$F, _root_.io.grpc.ServerServiceDefinition] =
+        _root_.cats.effect.std.Dispatcher.apply[$F](CE).evalMap { disp =>
+          _root_.higherkindness.mu.rpc.internal.service.GRPCServiceDefBuilder.build[$F](
+            ${lit(fullServiceName)},
+            ..${serverCallDescriptorsAndTracingHandlers}
+          )
+        }
       """
 
     private val clientCallMethods: List[Tree] = rpcRequests.map(_.clientDef)
@@ -227,12 +230,8 @@ class RPCServiceModel[C <: Context](val c: C) {
       )(implicit ..$classImplicits): _root_.cats.effect.Resource[$F, $serviceName[$F]] =
         _root_.cats.effect.Resource.make(channel)(channel =>
           CE.void(CE.delay(channel.shutdown()))
-        ).flatMap(ch =>
-          _root_.cats.effect.Resource.make[$F, $serviceName[$F]](
-            CE.delay(new $Client[$F](ch, options))
-          )($anonymousParam =>
-            CE.unit
-          )
+        ).evalMap(ch =>
+          CE.delay(new $Client[$F](ch, options))
         )
       """.suppressWarts("DefaultArguments")
 
@@ -242,10 +241,11 @@ class RPCServiceModel[C <: Context](val c: C) {
         channelFor: _root_.higherkindness.mu.rpc.ChannelFor,
         channelConfigList: List[_root_.higherkindness.mu.rpc.channel.ManagedChannelConfig] =
           List(_root_.higherkindness.mu.rpc.channel.UsePlaintext()),
+        disp: _root_.cats.effect.std.Dispatcher[$F],
         options: _root_.io.grpc.CallOptions = _root_.io.grpc.CallOptions.DEFAULT
       )(implicit ..$classImplicits): $serviceName[$F] = {
         val managedChannelInterpreter =
-          new _root_.higherkindness.mu.rpc.channel.ManagedChannelInterpreter[$F](channelFor, channelConfigList).unsafeBuild
+          new _root_.higherkindness.mu.rpc.channel.ManagedChannelInterpreter[$F](channelFor, channelConfigList).unsafeBuild(disp)
         new $Client[$F](managedChannelInterpreter, options)
       }""".suppressWarts("DefaultArguments")
 
@@ -316,10 +316,11 @@ class RPCServiceModel[C <: Context](val c: C) {
         channelFor: _root_.higherkindness.mu.rpc.ChannelFor,
         channelConfigList: List[_root_.higherkindness.mu.rpc.channel.ManagedChannelConfig] =
           List(_root_.higherkindness.mu.rpc.channel.UsePlaintext()),
+        disp: _root_.cats.effect.std.Dispatcher[$F],
         options: _root_.io.grpc.CallOptions = _root_.io.grpc.CallOptions.DEFAULT
       )(implicit ..$classImplicits): $serviceName[$kleisliFSpanF] = {
         val managedChannelInterpreter =
-          new _root_.higherkindness.mu.rpc.channel.ManagedChannelInterpreter[$F](channelFor, channelConfigList).unsafeBuild
+          new _root_.higherkindness.mu.rpc.channel.ManagedChannelInterpreter[$F](channelFor, channelConfigList).unsafeBuild(disp)
         new $TracingClient[$F](managedChannelInterpreter, options)
       }""".suppressWarts("DefaultArguments")
 
@@ -369,7 +370,7 @@ class RPCServiceModel[C <: Context](val c: C) {
         )
     } yield HttpOperation(op, F)
 
-    val streamConstraints: List[Tree] = List(q"F: _root_.cats.effect.Sync[$F]")
+    val streamConstraints: List[Tree] = List(q"F: _root_.cats.effect.Concurrent[$F]")
 
     val httpRequests = httpOperations.map(_.toRequestTree)
 

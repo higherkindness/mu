@@ -18,12 +18,11 @@ package higherkindness.mu.rpc.benchmarks
 package shared
 package server
 
-import cats.effect._
 import higherkindness.mu.rpc.benchmarks.shared.models._
 import higherkindness.mu.rpc.benchmarks.shared.protocols._
 import higherkindness.mu.rpc.protocol.Empty
 
-abstract class HandlerImpl[F[_]: Effect](implicit persistenceService: PersistenceService[F]) {
+abstract class HandlerImpl[F[_]](implicit persistenceService: PersistenceService[F]) {
 
   def listPersons(b: Empty.type): F[PersonList] = {
     val _ = b // makes compiler happy: parameter value b in method listPersons is never used
@@ -40,14 +39,14 @@ abstract class HandlerImpl[F[_]: Effect](implicit persistenceService: Persistenc
     persistenceService.createPerson(person)
 }
 
-class ProtoHandler[F[_]: Effect](implicit PS: PersistenceService[F])
+class ProtoHandler[F[_]](implicit PS: PersistenceService[F])
     extends HandlerImpl[F]
     with PersonServicePB[F]
 
-class AvroHandler[F[_]: Effect](implicit PS: PersistenceService[F])
+class AvroHandler[F[_]](implicit PS: PersistenceService[F])
     extends HandlerImpl[F]
     with PersonServiceAvro[F]
 
-class AvroWithSchemaHandler[F[_]: Effect](implicit PS: PersistenceService[F])
+class AvroWithSchemaHandler[F[_]](implicit PS: PersistenceService[F])
     extends HandlerImpl[F]
     with PersonServiceAvroWithSchema[F]

@@ -21,7 +21,8 @@ import java.util.concurrent.TimeUnit
 
 import cats.Apply
 import cats.syntax.apply._
-import higherkindness.mu.rpc.common.{ConcurrentMonad, SC}
+import higherkindness.mu.rpc.common.SC
+import cats.effect.IO
 import io.grpc.{Server, ServerServiceDefinition}
 
 class GrpcServerTests extends RpcServerTestSuite {
@@ -52,22 +53,22 @@ class GrpcServerTests extends RpcServerTestSuite {
         import APP._
 
         val a = isShutdown
-        val b = start()
+        val b = start
         val c = getPort
         val d = getServices
         val e = getImmutableServices
         val f = getMutableServices
-        val g = shutdown()
-        val h = shutdownNow()
+        val g = shutdown
+        val h = shutdownNow
         val i = isShutdown
         val j = isTerminated
         val k = awaitTerminationTimeout(timeout, timeoutUnit)
-        val l = awaitTermination()
+        val l = awaitTermination
 
         (a, b, c, d, e, f, g, h, i, j, k, l).tupled
       }
 
-      program[ConcurrentMonad](grpcServerHandlerTests).unsafeRunSync() shouldBe ((
+      program[IO](grpcServerHandlerTests).unsafeRunSync() shouldBe ((
         b,
         (),
         SC.port,

@@ -16,37 +16,18 @@
 
 package higherkindness.mu.rpc.channel.cache
 
-import java.util.concurrent.TimeUnit
-
-import cats.effect._
-import cats.effect.concurrent.Ref
+import cats.effect.{Ref, _}
+import cats.effect.unsafe.implicits._
 import cats.implicits._
 import fs2.Stream
-import higherkindness.mu.rpc.common.util.FakeClock
-
-import scala.concurrent.duration._
 import org.scalatest.matchers.should.Matchers
 import org.scalatest.wordspec.AnyWordSpec
 
+import scala.concurrent.duration._
+
 class ClientCacheTests extends AnyWordSpec with Matchers {
 
-  val EC: scala.concurrent.ExecutionContext =
-    scala.concurrent.ExecutionContext.Implicits.global
-
   private[this] val clockStep: Int = 50
-
-  def buildTimer: IO[Timer[IO]] =
-    FakeClock.build[IO](clockStep.toLong, TimeUnit.MILLISECONDS).map { fakeClock =>
-      new Timer[IO] {
-
-        private[this] val innerTimer = IO.timer(EC)
-
-        override def clock: Clock[IO]                          = fakeClock
-        override def sleep(duration: FiniteDuration): IO[Unit] = innerTimer.sleep(duration)
-      }
-    }
-
-  implicit val cs: ContextShift[IO] = IO.contextShift(EC)
 
   def compiledStream[H](
       ref1: Ref[IO, Int],
@@ -56,7 +37,6 @@ class ClientCacheTests extends AnyWordSpec with Matchers {
   ): IO[Unit] =
     (for {
       keyRef <- Stream.eval(Ref.of[IO, List[H]](keys))
-      timer  <- Stream.eval(buildTimer)
       clientCache <- ClientCache.impl[MyClient, IO, H](
         keyRef.modify(list => (list.tail, list.head)),
         _ =>
@@ -65,7 +45,7 @@ class ClientCacheTests extends AnyWordSpec with Matchers {
             .map(_ => (new MyClient[IO], ref2.update(_ + 1).void)),
         cleanUp.millis,
         cleanUp.millis
-      )(ConcurrentEffect[IO], cs, timer)
+      )
       _ <- Stream.eval((1 to keys.length).toList.traverse_(_ => clientCache.getClient))
     } yield ()).compile.drain
 

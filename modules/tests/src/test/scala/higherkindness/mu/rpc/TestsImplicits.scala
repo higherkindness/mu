@@ -16,14 +16,13 @@
 
 package higherkindness.mu.rpc
 
-import cats.effect.{ContextShift, IO, Timer}
+import cats.effect.unsafe
 
 object TestsImplicits {
 
   val EC: scala.concurrent.ExecutionContext =
     scala.concurrent.ExecutionContext.Implicits.global
 
-  implicit val timer: Timer[IO]     = IO.timer(EC)
-  implicit val cs: ContextShift[IO] = IO.contextShift(EC)
+  implicit val ioRuntime: unsafe.IORuntime = unsafe.IORuntime.global
 
 }

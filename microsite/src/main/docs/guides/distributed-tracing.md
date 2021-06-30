@@ -80,11 +80,10 @@ object OrdinaryServer extends IOApp {
 
   implicit val service: MyService[IO] = new MyAmazingService[IO]
 
-  def run(args: List[String]): IO[ExitCode] = for {
+  def run(args: List[String]): IO[ExitCode] = (for {
     serviceDef <- MyService.bindService[IO]
-    server     <- GrpcServer.default[IO](8080, List(AddService(serviceDef)))
-    _          <- GrpcServer.server[IO](server)
-  } yield ExitCode.Success
+    _          <- GrpcServer.defaultServer[IO](8080, List(AddService(serviceDef)))
+  } yield ()).useForever
 
 }
 ```
@@ -155,13 +154,11 @@ object TracingServer extends IOApp {
     new MyAmazingService[Kleisli[IO, Span[IO], *]]
 
   def run(args: List[String]): IO[ExitCode] =
-    entryPoint[IO].use { ep =>
-      for {
-        serviceDef <- MyService.bindTracingService[IO](ep)
-        server     <- GrpcServer.default[IO](8080, List(AddService(serviceDef)))
-        _          <- GrpcServer.server[IO](server)
-      } yield ExitCode.Success
-    }
+    entryPoint[IO]
+      .flatMap { ep => MyService.bindTracingService[IO](ep) }
+      .flatMap { serviceDef =>
+        GrpcServer.defaultServer[IO](8080, List(AddService(serviceDef)))
+      }.useForever
 
 }
 ```

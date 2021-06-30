@@ -34,10 +34,10 @@ class ProtoBenchmark extends ServerRuntime {
   lazy val client = PersonServicePB.unsafeClientFromChannel[IO](clientChannel)
 
   @Setup
-  def setup(): Unit = startServer
+  def setup(): Unit = startServer()
 
   @TearDown
-  def shutdown(): Unit = tearDown
+  def shutdown(): Unit = tearDown()
 
   @Benchmark
   def listPersons: PersonList =

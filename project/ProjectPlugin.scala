@@ -16,28 +16,26 @@ object ProjectPlugin extends AutoPlugin {
     lazy val V = new {
       val avro4s: String                = "4.0.10"
       val betterMonadicFor: String      = "0.3.1"
-      val catsEffect: String            = "2.5.1"
+      val catsEffect: String            = "3.1.1"
       val circe: String                 = "0.14.1"
       val dockerItScala                 = "0.9.9"
       val dropwizard: String            = "4.2.2"
       val enumeratum: String            = "1.7.0"
-      val fs2: String                   = "2.5.6"
-      val fs2Grpc: String               = "0.10.3"
+      val fs2: String                   = "3.0.4"
+      val fs2Grpc: String               = "2.1.2"
       val grpc: String                  = "1.38.1"
-      val http4s: String                = "0.21.24"
+      val http4s: String                = "0.23.0-RC1"
+      val jawnFs2: String               = "2.0.0"
       val kindProjector: String         = "0.13.0"
-      val log4cats: String              = "1.3.1"
+      val log4cats: String              = "2.1.1"
       val log4s: String                 = "1.10.0"
       val logback: String               = "1.2.3"
-      val scalalogging: String          = "3.9.4" // used in tests
-      val monix: String                 = "3.4.0"
-      val natchez: String               = "0.0.26"
-      val nettySSL: String              = "2.0.40.Final"
+      val natchez: String               = "0.1.4"
+      val nettySSL: String              = "2.0.34.Final"
       val paradise: String              = "2.1.1"
       val pbdirect: String              = "0.6.1"
       val prometheus: String            = "0.10.0"
       val pureconfig: String            = "0.16.0"
-      val reactiveStreams: String       = "1.0.3"
       val scalaCollectionCompat: String = "2.4.4"
       val scalacheckToolbox: String     = "0.6.0"
       val scalamock: String             = "5.1.0"
@@ -71,17 +69,10 @@ object ProjectPlugin extends AutoPlugin {
       scalacOptions ++= on(2, 13)("-Ymacro-annotations").value
     )
 
-    lazy val monixSettings: Seq[Def.Setting[_]] = Seq(
-      libraryDependencies ++= Seq(
-        "io.monix"           %% "monix"            % V.monix,
-        "org.reactivestreams" % "reactive-streams" % V.reactiveStreams
-      )
-    )
-
     lazy val fs2Settings: Seq[Def.Setting[_]] = Seq(
       libraryDependencies ++= Seq(
-        "co.fs2"                %% "fs2-core"     % V.fs2,
-        "org.lyranthe.fs2-grpc" %% "java-runtime" % V.fs2Grpc
+        "co.fs2"        %% "fs2-core"         % V.fs2,
+        "org.typelevel" %% "fs2-grpc-runtime" % V.fs2Grpc
       )
     )
 
@@ -120,10 +111,11 @@ object ProjectPlugin extends AutoPlugin {
 
     lazy val httpSettings: Seq[Def.Setting[_]] = Seq(
       libraryDependencies ++= Seq(
-        "org.http4s" %% "http4s-dsl"          % V.http4s,
-        "org.http4s" %% "http4s-blaze-server" % V.http4s,
-        "org.http4s" %% "http4s-circe"        % V.http4s,
-        "io.grpc"     % "grpc-stub"           % V.grpc
+        "org.http4s"    %% "http4s-dsl"          % V.http4s,
+        "org.http4s"    %% "http4s-blaze-server" % V.http4s,
+        "org.http4s"    %% "http4s-circe"        % V.http4s,
+        "org.typelevel" %% "jawn-fs2"            % V.jawnFs2,
+        "io.grpc"        % "grpc-stub"           % V.grpc
       )
     )
 
@@ -170,8 +162,6 @@ object ProjectPlugin extends AutoPlugin {
       },
       libraryDependencies ++= Seq(
         "io.grpc"        % "grpc-all"         % V.grpc,
-        "org.typelevel" %% "log4cats-core"    % V.log4cats,
-        "org.typelevel" %% "log4cats-slf4j"   % V.log4cats,
         "org.slf4j"      % "log4j-over-slf4j" % V.slf4j,
         "org.slf4j"      % "jul-to-slf4j"     % V.slf4j,
         "org.slf4j"      % "jcl-over-slf4j"   % V.slf4j,

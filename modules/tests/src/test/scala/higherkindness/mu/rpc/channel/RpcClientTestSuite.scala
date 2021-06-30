@@ -18,15 +18,15 @@ package higherkindness.mu.rpc
 package channel
 
 import java.util.concurrent.{Callable, Executor, Executors, TimeUnit}
-
 import com.google.common.util.concurrent.{ListenableFuture, ListeningExecutorService, MoreExecutors}
 import higherkindness.mu.rpc.channel.utils.StringMarshaller
 import higherkindness.mu.rpc.common.{RpcBaseTestSuite, SC}
 import higherkindness.mu.rpc.testing.interceptors.NoopInterceptor
 import io.grpc.internal.testing.TestUtils
 import io.grpc._
+import org.scalatest.OneInstancePerTest
 
-trait RpcClientTestSuite extends RpcBaseTestSuite {
+trait RpcClientTestSuite extends RpcBaseTestSuite with OneInstancePerTest {
 
   trait DummyData {
 

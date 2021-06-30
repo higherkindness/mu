@@ -22,8 +22,9 @@ import higherkindness.mu.rpc.common.RpcBaseTestSuite
 import higherkindness.mu.rpc.internal.service.GRPCServiceDefBuilder
 import io.grpc._
 import io.grpc.testing.TestMethodDescriptors
+import org.scalatest.OneInstancePerTest
 
-class GRPCServiceDefBuilderTests extends RpcBaseTestSuite {
+class GRPCServiceDefBuilderTests extends RpcBaseTestSuite with OneInstancePerTest {
 
   val serviceName                              = "service_foo"
   val invalidServiceName                       = "invalid_service_name"

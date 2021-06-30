@@ -16,13 +16,14 @@
 
 package higherkindness.mu.rpc.healthcheck.fs2.handler
 
-import cats.effect.{Concurrent, Sync}
-import cats.effect.concurrent.Ref
-import higherkindness.mu.rpc.healthcheck.ordering._
-import cats.implicits._
+import cats.Applicative
+import cats.effect.Ref
+import cats.effect.kernel.Concurrent
+import cats.syntax.all._
 import fs2.Stream
-import fs2.concurrent.Topic
+import fs2.concurrent.SignallingRef
 import higherkindness.mu.rpc.healthcheck.fs2.serviceFS2.HealthCheckServiceFS2
+import higherkindness.mu.rpc.healthcheck.ordering._
 import higherkindness.mu.rpc.healthcheck.unary.handler._
 
 object HealthServiceFS2 {
@@ -32,27 +33,25 @@ object HealthServiceFS2 {
     val checkRef: F[Ref[F, Map[String, ServerStatus]]] =
       Ref.of[F, Map[String, ServerStatus]](Map.empty[String, ServerStatus])
 
-    val watchTopic: F[Topic[F, HealthStatus]] = Topic(
-      HealthStatus(new HealthCheck("FirstStatus"), ServerStatus("UNKNOWN"))
-    )
-
     for {
       c <- checkRef
-      t <- watchTopic
+      t <- SignallingRef[F, HealthStatus](
+        HealthStatus(new HealthCheck("FirstStatus"), ServerStatus("UNKNOWN"))
+      )
     } yield new HealthCheckServiceFS2Impl[F](c, t)
   }
 }
-class HealthCheckServiceFS2Impl[F[_]: Sync](
+
+class HealthCheckServiceFS2Impl[F[_]: Applicative](
     checkStatus: Ref[F, Map[String, ServerStatus]],
-    watchTopic: Topic[F, HealthStatus]
+    watchTopic: SignallingRef[F, HealthStatus]
 ) extends AbstractHealthService[F](checkStatus)
     with HealthCheckServiceFS2[F] {
 
   def setStatus(newStatus: HealthStatus): F[Unit] =
-    checkStatus
-      .update(_ + (newStatus.hc.nameService -> newStatus.status)) <*
-      Stream.eval(watchTopic.publish1(newStatus)).compile.drain
+    checkStatus.update(_ + (newStatus.hc.nameService -> newStatus.status)) <*
+      watchTopic.set(newStatus)
 
   def watch(service: HealthCheck): F[Stream[F, HealthStatus]] =
-    watchTopic.subscribe(100).filter(_.hc === service).pure[F]
+    watchTopic.discrete.debug().filter(_.hc === service).pure[F]
 }

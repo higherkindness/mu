@@ -16,30 +16,32 @@
 
 package higherkindness.mu.rpc.internal.server
 
-import cats.effect.{Effect, IO}
 import cats.data.Kleisli
-import cats.syntax.apply._
-import io.grpc._
-import io.grpc.ServerCall.Listener
-import io.grpc.stub.ServerCalls
-import io.grpc.stub.ServerCalls.UnaryMethod
-import io.grpc.stub.StreamObserver
+import cats.effect.Async
+import cats.effect.std.Dispatcher
+import cats.syntax.all._
 import higherkindness.mu.rpc.protocol.CompressionType
+import io.grpc.ServerCall.Listener
+import io.grpc._
+import io.grpc.stub.ServerCalls.UnaryMethod
+import io.grpc.stub.{ServerCalls, StreamObserver}
 import natchez.{EntryPoint, Span}
 
 object handlers {
 
-  def unary[F[_]: Effect, Req, Res](
+  def unary[F[_]: Async, Req, Res](
       f: Req => F[Res],
-      compressionType: CompressionType
+      compressionType: CompressionType,
+      disp: Dispatcher[F]
   ): ServerCallHandler[Req, Res] =
-    ServerCalls.asyncUnaryCall(unaryMethod[F, Req, Res](f, compressionType))
+    ServerCalls.asyncUnaryCall(unaryMethod[F, Req, Res](f, compressionType, disp))
 
-  def tracingUnary[F[_]: Effect, Req, Res](
+  def tracingUnary[F[_]: Async, Req, Res](
       f: Req => Kleisli[F, Span[F], Res],
       methodDescriptor: MethodDescriptor[Req, Res],
       entrypoint: EntryPoint[F],
-      compressionType: CompressionType
+      compressionType: CompressionType,
+      disp: Dispatcher[F]
   ): ServerCallHandler[Req, Res] =
     new ServerCallHandler[Req, Res] {
       def startCall(
@@ -52,26 +54,27 @@ object handlers {
 
         val method = unaryMethod[F, Req, Res](
           req => spanResource.use(span => f(req).run(span)),
-          compressionType
+          compressionType,
+          disp
         )
 
         ServerCalls.asyncUnaryCall(method).startCall(call, metadata)
       }
     }
 
-  private def unaryMethod[F[_]: Effect, Req, Res](
+  private def unaryMethod[F[_]: Async, Req, Res](
       f: Req => F[Res],
-      compressionType: CompressionType
+      compressionType: CompressionType,
+      disp: Dispatcher[F]
   ): UnaryMethod[Req, Res] =
     new UnaryMethod[Req, Res] {
-      override def invoke(request: Req, responseObserver: StreamObserver[Res]): Unit = {
-        Effect[F]
-          .runAsync(addCompression(responseObserver, compressionType) *> f(request)) {
-            completeObserver[IO, Res](responseObserver)
+      override def invoke(request: Req, responseObserver: StreamObserver[Res]): Unit =
+        disp.unsafeRunAndForget {
+          (addCompression(responseObserver, compressionType) *> f(request)).attempt.flatMap {
+            result =>
+              completeObserver[F, Res](responseObserver).apply(result)
           }
-          .toIO
-          .unsafeRunAsync(_ => ())
-      }
+        }
     }
 
 }

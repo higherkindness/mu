@@ -20,7 +20,11 @@ import higherkindness.mu.rpc.common._
 import org.scalatest._
 import org.scalatestplus.scalacheck.Checkers
 
-class RPCAnnotationParamTests extends RpcBaseTestSuite with BeforeAndAfterAll with Checkers {
+class RPCAnnotationParamTests
+    extends RpcBaseTestSuite
+    with OneInstancePerTest
+    with BeforeAndAfterAll
+    with Checkers {
 
   case class Request(s: String)
   case class Response(length: Int)

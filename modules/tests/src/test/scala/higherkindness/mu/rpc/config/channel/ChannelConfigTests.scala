@@ -16,8 +16,9 @@
 
 package higherkindness.mu.rpc.config.channel
 
+import cats.effect.IO
 import higherkindness.mu.rpc.channel.RpcClientTestSuite
-import higherkindness.mu.rpc.common.{ConcurrentMonad, SC}
+import higherkindness.mu.rpc.common.SC
 import higherkindness.mu.rpc.{ChannelForAddress, ChannelForTarget}
 
 class ChannelConfigTests extends RpcClientTestSuite {
@@ -25,7 +26,7 @@ class ChannelConfigTests extends RpcClientTestSuite {
   "ChannelConfig" should {
 
     "for Address [host, port] work as expected" in {
-      ConfigForAddress[ConcurrentMonad](
+      ConfigForAddress[IO](
         SC.host,
         SC.port.toString
       ).unsafeRunSync() shouldBe ChannelForAddress(
@@ -36,7 +37,7 @@ class ChannelConfigTests extends RpcClientTestSuite {
 
     "for Target work as expected" in {
 
-      ConfigForTarget[ConcurrentMonad](SC.host).unsafeRunSync() shouldBe ChannelForTarget("target")
+      ConfigForTarget[IO](SC.host).unsafeRunSync() shouldBe ChannelForTarget("target")
     }
 
   }

@@ -17,10 +17,10 @@
 package higherkindness.mu.rpc
 package ssl
 
+import cats.effect.{IO, Resource, Sync}
+import cats.syntax.all._
 import java.io.File
 import java.security.cert.X509Certificate
-
-import cats.effect.Effect
 import higherkindness.mu.rpc.common._
 import higherkindness.mu.rpc.protocol._
 import higherkindness.mu.rpc.server.netty.SetSslContext
@@ -53,11 +53,11 @@ object Utils extends CommonUtils {
       import database._
       import service._
 
-      class ServerRPCService[F[_]: Effect]
+      class ServerRPCService[F[_]: Sync]
           extends AvroRPCService[F]
           with AvroWithSchemaRPCService[F] {
 
-        def unary(a: A): F[C] = Effect[F].delay(c1)
+        def unary(a: A): F[C] = Sync[F].delay(c1)
 
         def unaryWithSchema(a: A): F[C] = unary(a)
 
@@ -69,7 +69,6 @@ object Utils extends CommonUtils {
 
   trait MuRuntime {
 
-    import TestsImplicits._
     import service._
     import handlers.server._
     import cats.instances.list._
@@ -79,8 +78,8 @@ object Utils extends CommonUtils {
     // Server Runtime Configuration //
     //////////////////////////////////
 
-    implicit val muRPCHandler: ServerRPCService[ConcurrentMonad] =
-      new ServerRPCService[ConcurrentMonad]
+    implicit val muRPCHandler: ServerRPCService[IO] =
+      new ServerRPCService[IO]
 
     val serverCertFile: File                         = TestUtils.loadCert("server1.pem")
     val serverPrivateKeyFile: File                   = TestUtils.loadCert("server1.key")
@@ -96,16 +95,18 @@ object Utils extends CommonUtils {
         .clientAuth(ClientAuth.REQUIRE)
         .build()
 
-    val grpcConfigs: ConcurrentMonad[List[GrpcConfig]] =
+    val grpcConfigs: Resource[IO, List[GrpcConfig]] =
       List(
-        AvroRPCService.bindService[ConcurrentMonad],
-        AvroWithSchemaRPCService.bindService[ConcurrentMonad]
+        AvroRPCService.bindService[IO],
+        AvroWithSchemaRPCService.bindService[IO]
       ).sequence
         .map(_.map(AddService))
         .map(services => SetSslContext(serverSslContext) :: services)
 
-    implicit val grpcServer: GrpcServer[ConcurrentMonad] =
-      grpcConfigs.flatMap(GrpcServer.netty[ConcurrentMonad](SC.port, _)).unsafeRunSync()
+    val grpcServer: Resource[IO, GrpcServer[IO]] =
+      grpcConfigs.evalMap(GrpcServer.netty[IO](SC.port, _)).flatMap { s =>
+        Resource.make(s.start)(_ => s.shutdown >> s.awaitTermination).as(s)
+      }
 
     //////////////////////////////////
     // Client Runtime Configuration //

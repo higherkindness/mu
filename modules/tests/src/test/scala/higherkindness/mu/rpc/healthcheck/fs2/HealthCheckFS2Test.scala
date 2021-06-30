@@ -17,39 +17,32 @@
 package higherkindness.mu.rpc.healthcheck.fs2
 
 import cats.effect.IO
+import cats.effect.unsafe.implicits.global
 import higherkindness.mu.rpc.healthcheck.fs2.handler.HealthServiceFS2
 import higherkindness.mu.rpc.healthcheck.unary.handler.{HealthCheck, HealthStatus, ServerStatus}
 import org.scalatest.matchers.should.Matchers
-import org.scalatest.wordspec.AnyWordSpec
+import org.scalatest.wordspec.AsyncWordSpec
+import fs2.Stream
 
-class HealthCheckFS2Test extends AnyWordSpec with Matchers {
+class HealthCheckFS2Test extends AsyncWordSpec with Matchers {
 
   "FS2 health check service" should {
 
-    val EC: scala.concurrent.ExecutionContext =
-      scala.concurrent.ExecutionContext.Implicits.global
-
-    implicit val cs: cats.effect.ContextShift[cats.effect.IO] =
-      cats.effect.IO.contextShift(EC)
-
     val handler = HealthServiceFS2.buildInstance[IO]
     val hc      = new HealthCheck("example")
-    val hc0     = new HealthCheck("FirstStatus")
 
     "work with setStatus and watch" in {
       {
         for {
-          hand    <- handler
-          stream1 <- hand.watch(hc0)
-          v1      <- stream1.take(1).compile.toList
-          _       <- hand.setStatus(HealthStatus(hc, ServerStatus("NOT_SERVING")))
-          stream2 <- hand.watch(hc)
-          v2      <- stream2.take(1).compile.toList
-        } yield (v1, v2)
-      }.unsafeRunSync() shouldBe Tuple2(
-        List(HealthStatus(hc0, ServerStatus("UNKNOWN"))),
-        List(HealthStatus(hc, ServerStatus("NOT_SERVING")))
-      )
+          hand <- handler
+          stream1 = Stream.force(hand.watch(hc))
+          v1 <- stream1.take(1).compile.toList.start
+          status = HealthStatus(hc, ServerStatus("NOT_SERVING"))
+          _       <- hand.setStatus(status)
+          outcome <- v1.join
+          result  <- outcome.embed(onCancel = IO(fail("Somehow canceled")))
+        } yield result shouldBe List(status)
+      }.unsafeToFuture()
     }
   }
 }

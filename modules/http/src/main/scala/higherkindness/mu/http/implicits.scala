@@ -16,8 +16,7 @@
 
 package higherkindness.mu.http
 
-import cats.ApplicativeError
-import cats.effect._
+import cats.{Applicative, ApplicativeError, ApplicativeThrow}
 import cats.implicits._
 import cats.syntax.either._
 import fs2.{RaiseThrowable, Stream}
@@ -27,10 +26,11 @@ import io.circe._
 import io.circe.jawn.CirceSupportParser.facade
 import io.circe.syntax._
 import io.grpc.{Status => _, _}
-import jawnfs2._
 import org.http4s._
 import org.http4s.dsl.Http4sDsl
 import org.http4s.Status.Ok
+import org.typelevel.jawn.fs2._
+
 import scala.util.control.NoStackTrace
 
 object implicits {
@@ -96,17 +96,18 @@ object implicits {
       stream.attempt.map(_.bimap(_.toUnexpected, identity).asJson)
   }
 
-  implicit class FResponseOps[F[_]: Sync](private val response: F[Response[F]])
-      extends Http4sDsl[F] {
+  implicit class FResponseOps[F[_]](private val response: F[Response[F]]) extends Http4sDsl[F] {
 
-    def adaptErrors: F[Response[F]] =
+    def adaptErrors(implicit F: ApplicativeThrow[F]): F[Response[F]] =
       response.handleErrorWith {
         case se: StatusException         => errorFromStatus(se.getStatus, se.getMessage)
         case sre: StatusRuntimeException => errorFromStatus(sre.getStatus, sre.getMessage)
         case other: Throwable            => InternalServerError(other.getMessage)
       }
 
-    private def errorFromStatus(status: io.grpc.Status, message: String): F[Response[F]] =
+    private def errorFromStatus(status: io.grpc.Status, message: String)(implicit
+        F: Applicative[F]
+    ): F[Response[F]] =
       status.getCode match {
         case INVALID_ARGUMENT  => BadRequest(message)
         case UNAUTHENTICATED   => Forbidden(message)
@@ -117,7 +118,9 @@ object implicits {
       }
   }
 
-  def handleResponseError[F[_]: Sync](errorResponse: Response[F]): F[Throwable] =
+  def handleResponseError[F[_]: RaiseThrowable: fs2.Compiler.Target](
+      errorResponse: Response[F]
+  ): F[Throwable] =
     errorResponse.bodyText.compile.foldMonoid.map(body =>
       ResponseError(errorResponse.status, Some(body).filter(_.nonEmpty))
     )

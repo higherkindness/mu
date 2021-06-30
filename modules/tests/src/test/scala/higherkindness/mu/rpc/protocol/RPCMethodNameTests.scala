@@ -17,6 +17,7 @@
 package higherkindness.mu.rpc.protocol
 
 import cats.Applicative
+import cats.effect.IO
 import cats.syntax.applicative._
 import higherkindness.mu.rpc.common._
 import higherkindness.mu.rpc.protocol.Utils._
@@ -24,7 +25,11 @@ import org.scalacheck.Prop._
 import org.scalatest._
 import org.scalatestplus.scalacheck.Checkers
 
-class RPCMethodNameTests extends RpcBaseTestSuite with BeforeAndAfterAll with Checkers {
+class RPCMethodNameTests
+    extends RpcBaseTestSuite
+    with OneInstancePerTest
+    with BeforeAndAfterAll
+    with Checkers {
 
   object RPCService {
 
@@ -57,15 +62,14 @@ class RPCMethodNameTests extends RpcBaseTestSuite with BeforeAndAfterAll with Ch
   "A RPC server" should {
 
     import RPCService._
-    import higherkindness.mu.rpc.TestsImplicits._
 
-    implicit val H: RPCServiceDefImpl[ConcurrentMonad] = new RPCServiceDefImpl[ConcurrentMonad]
+    implicit val H: RPCServiceDefImpl[IO] = new RPCServiceDefImpl[IO]
 
     "be able to call a service with a capitalized method using proto" in {
 
       withClient(
-        ProtoRPCServiceDef.bindService[ConcurrentMonad],
-        ProtoRPCServiceDef.clientFromChannel[ConcurrentMonad](_)
+        ProtoRPCServiceDef.bindService[IO],
+        ProtoRPCServiceDef.clientFromChannel[IO](_)
       ) { client =>
         check {
           forAll { s: String => client.proto(Request(s)).map(_.length).unsafeRunSync() == s.length }
@@ -77,8 +81,8 @@ class RPCMethodNameTests extends RpcBaseTestSuite with BeforeAndAfterAll with Ch
     "be able to call a service with a capitalized method using avro" in {
 
       withClient(
-        AvroRPCServiceDef.bindService[ConcurrentMonad],
-        AvroRPCServiceDef.clientFromChannel[ConcurrentMonad](_)
+        AvroRPCServiceDef.bindService[IO],
+        AvroRPCServiceDef.clientFromChannel[IO](_)
       ) { client =>
         check {
           forAll { s: String => client.avro(Request(s)).map(_.length).unsafeRunSync() == s.length }
@@ -90,8 +94,8 @@ class RPCMethodNameTests extends RpcBaseTestSuite with BeforeAndAfterAll with Ch
     "be able to call a service with a capitalized method using avro with schema" in {
 
       withClient(
-        AvroWithSchemaRPCServiceDef.bindService[ConcurrentMonad],
-        AvroWithSchemaRPCServiceDef.clientFromChannel[ConcurrentMonad](_)
+        AvroWithSchemaRPCServiceDef.bindService[IO],
+        AvroWithSchemaRPCServiceDef.clientFromChannel[IO](_)
       ) { client =>
         check {
           forAll { s: String =>

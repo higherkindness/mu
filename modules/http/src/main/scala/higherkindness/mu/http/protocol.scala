@@ -17,9 +17,9 @@
 package higherkindness.mu.http
 package protocol
 
-import cats.effect.{ConcurrentEffect, Timer}
+import cats.effect.Async
 import org.http4s.HttpRoutes
-import org.http4s.server.blaze.BlazeServerBuilder
+import org.http4s.blaze.server.BlazeServerBuilder
 import org.http4s.implicits._
 import org.http4s.server.Router
 
@@ -32,7 +32,7 @@ case class RouteMap[F[_]](prefix: String, route: HttpRoutes[F])
 
 object HttpServer {
 
-  def bind[F[_]: ConcurrentEffect: Timer](
+  def bind[F[_]: Async](
       port: Int,
       host: String,
       routes: RouteMap[F]*

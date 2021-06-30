@@ -16,33 +16,34 @@
 
 package higherkindness.mu.rpc.internal
 
-import java.util.concurrent.{Executor => JavaExecutor}
-
-import cats.effect.{ContextShift, Effect}
-import cats.syntax.apply._
-import com.google.common.util.concurrent.{FutureCallback, Futures, ListenableFuture}
+import cats.effect.Async
+import cats.syntax.all._
+import com.google.common.util.concurrent.ListenableFuture
 import io.grpc.Metadata
 import io.grpc.Metadata.{ASCII_STRING_MARSHALLER, Key}
 import natchez.Kernel
 
+import scala.util.Try
+
 package object client {
 
   private[internal] def listenableFuture2Async[F[_], A](
-      fa: => ListenableFuture[A]
-  )(implicit E: Effect[F], CS: ContextShift[F]): F[A] =
-    E.async { cb =>
-      Futures.addCallback(
-        fa,
-        new FutureCallback[A] {
-          override def onSuccess(result: A): Unit = cb(Right(result))
-
-          override def onFailure(t: Throwable): Unit = cb(Left(t))
-        },
-        new JavaExecutor {
-          override def execute(command: Runnable): Unit =
-            E.toIO(CS.shift *> E.delay(command.run())).unsafeRunSync()
+      lfF: F[ListenableFuture[A]]
+  )(implicit F: Async[F]): F[A] =
+    F.async { cb =>
+      val back = lfF.flatMap { lf =>
+        F.executionContext.flatMap { ec =>
+          F.delay(
+            lf.addListener(
+              () => cb(Try(lf.get).toEither),
+              // Use the Async's compute EC to avoid needless context shifting across pools.
+              (command: Runnable) => ec.execute(command)
+            )
+          )
         }
-      )
+      }
+
+      back.as(None)
     }
 
   private[internal] def tracingKernelToHeaders(kernel: Kernel): Metadata = {

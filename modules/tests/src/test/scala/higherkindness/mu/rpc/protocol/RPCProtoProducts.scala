@@ -18,6 +18,7 @@ package higherkindness.mu.rpc
 package protocol
 
 import cats.Applicative
+import cats.effect.IO
 import cats.syntax.applicative._
 import higherkindness.mu.rpc.common._
 import higherkindness.mu.rpc.protocol.Utils._
@@ -25,7 +26,11 @@ import org.scalatest._
 import org.scalacheck.Prop._
 import org.scalatestplus.scalacheck.Checkers
 
-class RPCProtoProducts extends RpcBaseTestSuite with BeforeAndAfterAll with Checkers {
+class RPCProtoProducts
+    extends RpcBaseTestSuite
+    with OneInstancePerTest
+    with BeforeAndAfterAll
+    with Checkers {
 
   object RPCService {
 
@@ -81,17 +86,16 @@ class RPCProtoProducts extends RpcBaseTestSuite with BeforeAndAfterAll with Chec
 
   "A RPC server" should {
 
-    import TestsImplicits._
     import RPCService._
 
-    implicit val H: RPCServiceDefImpl[ConcurrentMonad] =
-      new RPCServiceDefImpl[ConcurrentMonad]
+    implicit val H: RPCServiceDefImpl[IO] =
+      new RPCServiceDefImpl[IO]
 
     "be able to serialize and deserialize Options in the request/response using proto format" in {
 
       withClient(
-        ProtoRPCServiceDef.bindService[ConcurrentMonad],
-        ProtoRPCServiceDef.clientFromChannel[ConcurrentMonad](_)
+        ProtoRPCServiceDef.bindService[IO],
+        ProtoRPCServiceDef.clientFromChannel[IO](_)
       ) { client =>
         check {
           forAll { maybeString: Option[String] =>
@@ -112,8 +116,8 @@ class RPCProtoProducts extends RpcBaseTestSuite with BeforeAndAfterAll with Chec
     "be able to serialize and deserialize Options in the request/response using avro format" in {
 
       withClient(
-        AvroRPCServiceDef.bindService[ConcurrentMonad],
-        AvroRPCServiceDef.clientFromChannel[ConcurrentMonad](_)
+        AvroRPCServiceDef.bindService[IO],
+        AvroRPCServiceDef.clientFromChannel[IO](_)
       ) { client =>
         check {
           forAll { maybeString: Option[String] =>
@@ -130,8 +134,8 @@ class RPCProtoProducts extends RpcBaseTestSuite with BeforeAndAfterAll with Chec
     "be able to serialize and deserialize Options in the request/response using avro with schema format" in {
 
       withClient(
-        AvroWithSchemaRPCServiceDef.bindService[ConcurrentMonad],
-        AvroWithSchemaRPCServiceDef.clientFromChannel[ConcurrentMonad](_)
+        AvroWithSchemaRPCServiceDef.bindService[IO],
+        AvroWithSchemaRPCServiceDef.clientFromChannel[IO](_)
       ) { client =>
         check {
           forAll { maybeString: Option[String] =>
@@ -148,8 +152,8 @@ class RPCProtoProducts extends RpcBaseTestSuite with BeforeAndAfterAll with Chec
     "be able to serialize and deserialize Lists in the request/response using proto format" in {
 
       withClient(
-        ProtoRPCServiceDef.bindService[ConcurrentMonad],
-        ProtoRPCServiceDef.clientFromChannel[ConcurrentMonad](_)
+        ProtoRPCServiceDef.bindService[IO],
+        ProtoRPCServiceDef.clientFromChannel[IO](_)
       ) { client =>
         check {
           forAll { list: List[String] =>
@@ -166,8 +170,8 @@ class RPCProtoProducts extends RpcBaseTestSuite with BeforeAndAfterAll with Chec
     "be able to serialize and deserialize Lists in the request/response using avro format" in {
 
       withClient(
-        AvroRPCServiceDef.bindService[ConcurrentMonad],
-        AvroRPCServiceDef.clientFromChannel[ConcurrentMonad](_)
+        AvroRPCServiceDef.bindService[IO],
+        AvroRPCServiceDef.clientFromChannel[IO](_)
       ) { client =>
         check {
           forAll { list: List[String] =>
@@ -183,8 +187,8 @@ class RPCProtoProducts extends RpcBaseTestSuite with BeforeAndAfterAll with Chec
     "be able to serialize and deserialize Lists in the request/response using avro with schema format" in {
 
       withClient(
-        AvroWithSchemaRPCServiceDef.bindService[ConcurrentMonad],
-        AvroWithSchemaRPCServiceDef.clientFromChannel[ConcurrentMonad](_)
+        AvroWithSchemaRPCServiceDef.bindService[IO],
+        AvroWithSchemaRPCServiceDef.clientFromChannel[IO](_)
       ) { client =>
         check {
           forAll { list: List[String] =>

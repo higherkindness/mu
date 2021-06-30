@@ -17,15 +17,15 @@
 package higherkindness.mu.rpc.internal.client
 
 import cats.data.Kleisli
+import cats.effect.{Async, Sync}
 import cats.syntax.flatMap._
-import cats.effect.{ContextShift, Effect}
 import io.grpc.stub.ClientCalls
 import io.grpc.{CallOptions, Channel, Metadata, MethodDescriptor}
 import natchez.Span
 
 object calls {
 
-  def unary[F[_]: Effect: ContextShift, Req, Res](
+  def unary[F[_]: Async, Req, Res](
       request: Req,
       descriptor: MethodDescriptor[Req, Res],
       channel: Channel,
@@ -33,21 +33,23 @@ object calls {
       extraHeaders: Metadata = new Metadata()
   ): F[Res] =
     listenableFuture2Async[F, Res](
-      ClientCalls
-        .futureUnaryCall(
-          new HeaderAttachingClientCall(channel.newCall(descriptor, options), extraHeaders),
-          request
-        )
+      Sync[F].delay(
+        ClientCalls
+          .futureUnaryCall(
+            new HeaderAttachingClientCall(channel.newCall(descriptor, options), extraHeaders),
+            request
+          )
+      )
     )
 
-  def tracingUnary[F[_]: Effect: ContextShift, Req, Res](
+  def tracingUnary[F[_]: Async, Req, Res](
       request: Req,
       descriptor: MethodDescriptor[Req, Res],
       channel: Channel,
       options: CallOptions
   ): Kleisli[F, Span[F], Res] =
     Kleisli[F, Span[F], Res] { parentSpan =>
-      parentSpan.span(descriptor.getFullMethodName()).use { span =>
+      parentSpan.span(descriptor.getFullMethodName).use { span =>
         span.kernel.flatMap { kernel =>
           val headers = tracingKernelToHeaders(kernel)
           unary[F, Req, Res](request, descriptor, channel, options, headers)

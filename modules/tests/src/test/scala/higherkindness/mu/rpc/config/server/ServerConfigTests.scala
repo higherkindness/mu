@@ -16,7 +16,8 @@
 
 package higherkindness.mu.rpc.config.server
 
-import higherkindness.mu.rpc.common.{ConcurrentMonad, SC}
+import cats.effect.IO
+import higherkindness.mu.rpc.common.SC
 import higherkindness.mu.rpc.server._
 
 import scala.concurrent.ExecutionContext
@@ -30,11 +31,11 @@ class ServerConfigTests extends RpcServerTestSuite {
     "load the port specified in the config file" in {
 
       val loadAndPort = for {
-        server <- BuildServerFromConfig[ConcurrentMonad]("rpc.server.port")
-        _      <- server.start()
+        server <- BuildServerFromConfig[IO]("rpc.server.port")
+        _      <- server.start
         port   <- server.getPort
-        _      <- server.shutdownNow()
-        _      <- server.awaitTermination()
+        _      <- server.shutdownNow
+        _      <- server.awaitTermination
       } yield port
 
       loadAndPort.unsafeRunSync() shouldBe SC.port
@@ -43,11 +44,11 @@ class ServerConfigTests extends RpcServerTestSuite {
     "load the default port when the config port path is not found" in {
 
       val loadAndPort = for {
-        server <- BuildServerFromConfig[ConcurrentMonad]("rpc.wrong.port")
-        _      <- server.start()
+        server <- BuildServerFromConfig[IO]("rpc.wrong.port")
+        _      <- server.start
         port   <- server.getPort
-        _      <- server.shutdownNow()
-        _      <- server.awaitTermination()
+        _      <- server.shutdownNow
+        _      <- server.awaitTermination
       } yield port
 
       loadAndPort.unsafeRunSync() shouldBe defaultPort

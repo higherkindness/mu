@@ -19,6 +19,7 @@ package channel
 
 import cats.effect.IO
 import cats.data.Kleisli
+import cats.effect.std.Dispatcher
 import higherkindness.mu.rpc.common.SC
 import io.grpc.ManagedChannel
 
@@ -41,11 +42,16 @@ abstract class ManagedChannelInterpreterTests extends RpcClientTestSuite {
 
       val managedChannelInterpreter = mkInterpreter(channelFor, channelConfigList)
 
-      val mc: ManagedChannel = managedChannelInterpreter.unsafeBuild
+      Dispatcher[IO]
+        .use { disp =>
+          val mc: ManagedChannel = managedChannelInterpreter.unsafeBuild(disp)
 
-      mc shouldBe a[ManagedChannel]
+          mc shouldBe a[ManagedChannel]
 
-      mc.shutdownNow()
+          IO(mc.shutdownNow())
+        }
+        .unsafeRunSync()
+
     }
 
     "build a io.grpc.ManagedChannel based on the specified configuration, for a target" in {
@@ -56,11 +62,16 @@ abstract class ManagedChannelInterpreterTests extends RpcClientTestSuite {
 
       val managedChannelInterpreter = mkInterpreter(channelFor, channelConfigList)
 
-      val mc: ManagedChannel = managedChannelInterpreter.unsafeBuild
+      Dispatcher[IO]
+        .use { disp =>
+          val mc: ManagedChannel = managedChannelInterpreter.unsafeBuild(disp)
 
-      mc shouldBe a[ManagedChannel]
+          mc shouldBe a[ManagedChannel]
 
-      mc.shutdownNow()
+          IO(mc.shutdownNow())
+        }
+        .unsafeRunSync()
+
     }
 
     "apply should work as expected" in {
@@ -85,11 +96,16 @@ abstract class ManagedChannelInterpreterTests extends RpcClientTestSuite {
 
       val managedChannelInterpreter = mkInterpreter(channelFor, channelConfigList)
 
-      val mc: ManagedChannel = managedChannelInterpreter.unsafeBuild
+      Dispatcher[IO]
+        .use { disp =>
+          val mc: ManagedChannel = managedChannelInterpreter.unsafeBuild(disp)
 
-      mc shouldBe a[ManagedChannel]
+          mc shouldBe a[ManagedChannel]
 
-      mc.shutdownNow()
+          IO(mc.shutdownNow())
+        }
+        .unsafeRunSync()
+
     }
 
     "throw an exception when ChannelFor is not recognized" in {

@@ -16,18 +16,18 @@
 
 package higherkindness.mu.rpc.channel.metrics
 
+import cats.effect.std.Dispatcher
 import cats.effect.{IO, Resource}
 import higherkindness.mu.rpc.common.{A => _, _}
-import higherkindness.mu.rpc.common.util.FakeClock
 import higherkindness.mu.rpc.internal.interceptors.GrpcMethodInfo
 import higherkindness.mu.rpc.internal.metrics.{MetricsOps, MetricsOpsRegister}
 import higherkindness.mu.rpc.protocol._
 import higherkindness.mu.rpc.testing.servers._
 import io.grpc.MethodDescriptor.MethodType
 import io.grpc.Status
-import org.scalatest.Assertion
+import org.scalatest.{Assertion, OneInstancePerTest}
 
-class MonitoringChannelInterceptorTests extends RpcBaseTestSuite {
+class MonitoringChannelInterceptorTests extends RpcBaseTestSuite with OneInstancePerTest {
 
   import services._
 
@@ -38,8 +38,7 @@ class MonitoringChannelInterceptorTests extends RpcBaseTestSuite {
     "generate the right metrics with proto" in {
       (for {
         metricsOps <- MetricsOpsRegister.build
-        clock      <- FakeClock.build[IO]()
-        _          <- makeProtoCalls(metricsOps)(_.serviceOp1(Request()))(protoRPCServiceImpl, clock)
+        _          <- makeProtoCalls(metricsOps)(_.serviceOp1(Request()))(protoRPCServiceImpl)
         assertion  <- checkCalls(metricsOps, List(serviceOp1Info))
       } yield assertion).unsafeRunSync()
     }
@@ -47,10 +46,9 @@ class MonitoringChannelInterceptorTests extends RpcBaseTestSuite {
     "generate the right metrics when calling multiple methods with proto" in {
       (for {
         metricsOps <- MetricsOpsRegister.build
-        clock      <- FakeClock.build[IO]()
         _ <- makeProtoCalls(metricsOps) { client =>
           client.serviceOp1(Request()) *> client.serviceOp2(Request())
-        }(protoRPCServiceImpl, clock)
+        }(protoRPCServiceImpl)
         assertion <- checkCalls(metricsOps, List(serviceOp1Info, serviceOp2Info))
       } yield assertion).unsafeRunSync()
     }
@@ -58,8 +56,7 @@ class MonitoringChannelInterceptorTests extends RpcBaseTestSuite {
     "generate the right metrics with proto when the server returns an error" in {
       (for {
         metricsOps <- MetricsOpsRegister.build
-        clock      <- FakeClock.build[IO]()
-        _          <- makeProtoCalls(metricsOps)(_.serviceOp1(Request()))(protoRPCServiceErrorImpl, clock)
+        _          <- makeProtoCalls(metricsOps)(_.serviceOp1(Request()))(protoRPCServiceErrorImpl)
         assertion  <- checkCalls(metricsOps, List(serviceOp1Info), serverError = true)
       } yield assertion).unsafeRunSync()
     }
@@ -68,12 +65,15 @@ class MonitoringChannelInterceptorTests extends RpcBaseTestSuite {
 
   private[this] def makeProtoCalls[A](metricsOps: MetricsOps[IO])(
       f: ProtoRPCService[IO] => IO[A]
-  )(implicit H: ProtoRPCService[IO], clock: FakeClock[IO]): IO[Either[Throwable, A]] = {
+  )(implicit H: ProtoRPCService[IO]): IO[Either[Throwable, A]] = {
 
-    withServerChannel[IO](
-      service = ProtoRPCService.bindService[IO],
-      clientInterceptor = Some(MetricsChannelInterceptor(metricsOps, myClassifier))
-    ).flatMap(createClient)
+    Dispatcher[IO]
+      .flatMap { disp =>
+        withServerChannel[IO](
+          service = ProtoRPCService.bindService[IO],
+          clientInterceptor = Some(MetricsChannelInterceptor(metricsOps, disp, myClassifier))
+        ).flatMap(createClient)
+      }
       .use(f(_).attempt)
   }
 
@@ -104,17 +104,14 @@ class MonitoringChannelInterceptorTests extends RpcBaseTestSuite {
       // Headers Time
       if (!serverError) {
         headersArgs.map(_._1) should contain theSameElementsAs methodCalls
-        headersArgs.map(_._2) shouldBe List.fill(methodCalls.size)(50)
         headersArgs.map(_._3) should contain theSameElementsAs argList.map(_._2)
       }
       // Total Time
       totalArgs.map(_._1) should contain theSameElementsAs methodCalls
       if (serverError) {
         totalArgs.map(_._2.getCode) shouldBe List.fill(methodCalls.size)(Status.INTERNAL.getCode)
-        totalArgs.map(_._3) shouldBe List.fill(methodCalls.size)(50)
       } else {
         totalArgs.map(_._2) shouldBe List.fill(methodCalls.size)(Status.OK)
-        totalArgs.map(_._3) shouldBe List.fill(methodCalls.size)(100)
       }
       totalArgs.map(_._4) should contain theSameElementsAs argList.map(_._2)
     }
@@ -125,9 +122,6 @@ object services {
 
   val EC: scala.concurrent.ExecutionContext =
     scala.concurrent.ExecutionContext.Implicits.global
-
-  implicit val timer: cats.effect.Timer[cats.effect.IO]     = cats.effect.IO.timer(EC)
-  implicit val cs: cats.effect.ContextShift[cats.effect.IO] = cats.effect.IO.contextShift(EC)
 
   final case class Request()
   final case class Response()

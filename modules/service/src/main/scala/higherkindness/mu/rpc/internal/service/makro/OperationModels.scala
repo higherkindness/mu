@@ -87,6 +87,8 @@ class OperationModels[C <: Context](val c: C) {
     private val compressionTypeTree: Tree =
       q"_root_.higherkindness.mu.rpc.protocol.${TermName(compressionType.toString)}"
 
+    private val dispatcherValueName: Tree = q"disp"
+
     private val clientCallsImpl = prevalentStreamingTarget match {
       case _: Fs2StreamTpe       => q"_root_.higherkindness.mu.rpc.internal.client.fs2.calls"
       case _: MonixObservableTpe => q"_root_.higherkindness.mu.rpc.internal.client.monix.calls"
@@ -234,6 +236,7 @@ class OperationModels[C <: Context](val c: C) {
         q"""
         _root_.higherkindness.mu.rpc.internal.server.fs2.handlers.clientStreaming[$F, $reqElemType, $respElemType](
           { (req: _root_.fs2.Stream[$F, $reqElemType], $anonymousParam) => algebra.$name(req) },
+          $dispatcherValueName,
           $compressionTypeTree
         )
         """
@@ -249,6 +252,7 @@ class OperationModels[C <: Context](val c: C) {
         q"""
         _root_.higherkindness.mu.rpc.internal.server.fs2.handlers.serverStreaming[$F, $reqElemType, $respElemType](
           { (req: $reqType, $anonymousParam) => algebra.$name(req) },
+          $dispatcherValueName,
           $compressionTypeTree
         )
         """
@@ -264,6 +268,7 @@ class OperationModels[C <: Context](val c: C) {
         q"""
         _root_.higherkindness.mu.rpc.internal.server.fs2.handlers.bidiStreaming[$F, $reqElemType, $respElemType](
           { (req: _root_.fs2.Stream[$F, $reqElemType], $anonymousParam) => algebra.$name(req) },
+          $dispatcherValueName,
           $compressionTypeTree
         )
         """
@@ -279,7 +284,8 @@ class OperationModels[C <: Context](val c: C) {
         q"""
         _root_.higherkindness.mu.rpc.internal.server.handlers.unary[$F, $reqElemType, $respElemType](
           algebra.$name,
-          $compressionTypeTree
+          $compressionTypeTree,
+          $dispatcherValueName
         )
         """
       case _ =>
@@ -299,6 +305,7 @@ class OperationModels[C <: Context](val c: C) {
           algebra.$name _,
           $methodDescriptorName.$methodDescriptorValName,
           entrypoint,
+          $dispatcherValueName,
           $compressionTypeTree
         )
         """
@@ -308,6 +315,7 @@ class OperationModels[C <: Context](val c: C) {
           algebra.$name _,
           $methodDescriptorName.$methodDescriptorValName,
           entrypoint,
+          $dispatcherValueName,
           $compressionTypeTree
         )
         """
@@ -317,6 +325,7 @@ class OperationModels[C <: Context](val c: C) {
           algebra.$name _,
           $methodDescriptorName.$methodDescriptorValName,
           entrypoint,
+          $dispatcherValueName,
           $compressionTypeTree
         )
         """
@@ -326,6 +335,7 @@ class OperationModels[C <: Context](val c: C) {
           algebra.$name _,
           $methodDescriptorName.$methodDescriptorValName,
           entrypoint,
+          $dispatcherValueName,
           $compressionTypeTree
         )
         """
@@ -335,6 +345,7 @@ class OperationModels[C <: Context](val c: C) {
           algebra.$name _,
           $methodDescriptorName.$methodDescriptorValName,
           entrypoint,
+          $dispatcherValueName,
           $compressionTypeTree
         )
         """
@@ -344,6 +355,7 @@ class OperationModels[C <: Context](val c: C) {
           algebra.$name _,
           $methodDescriptorName.$methodDescriptorValName,
           entrypoint,
+          $dispatcherValueName,
           $compressionTypeTree
         )
         """
@@ -353,7 +365,8 @@ class OperationModels[C <: Context](val c: C) {
           algebra.$name,
           $methodDescriptorName.$methodDescriptorValName,
           entrypoint,
-          $compressionTypeTree
+          $compressionTypeTree,
+          $dispatcherValueName
         )
         """
       case _ =>
@@ -477,9 +490,9 @@ class OperationModels[C <: Context](val c: C) {
     }
 
     val getPattern =
-      pq"_root_.org.http4s.Method.GET -> _root_.org.http4s.dsl.impl.Root / ${operation.name.toString}"
+      pq"_root_.org.http4s.Method.GET -> _root_.org.http4s.Uri.Path.Root / ${operation.name.toString}"
     val postPattern =
-      pq"msg @ _root_.org.http4s.Method.POST -> _root_.org.http4s.dsl.impl.Root / ${operation.name.toString}"
+      pq"msg @ _root_.org.http4s.Method.POST -> _root_.org.http4s.Uri.Path.Root / ${operation.name.toString}"
 
     def toRouteTree: Tree =
       request match {

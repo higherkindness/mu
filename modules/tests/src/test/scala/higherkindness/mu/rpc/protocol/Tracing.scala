@@ -17,11 +17,11 @@
 package higherkindness.mu.rpc.protocol
 
 import cats.effect.{IO, Resource}
-import cats.effect.concurrent.Ref
 import cats.syntax.applicativeError._
 import natchez._
 
 import java.net.URI
+import cats.effect.Ref
 
 /*
  * A minimal Natchez tracing implementation that accumulates
