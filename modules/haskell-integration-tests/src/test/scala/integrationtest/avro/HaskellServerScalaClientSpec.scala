@@ -23,7 +23,7 @@ import higherkindness.mu.rpc._
 import higherkindness.mu.rpc.protocol.Empty
 
 import io.grpc.CallOptions
-import cats.effect.{ContextShift, IO, Resource}
+import cats.effect.{IO, Resource}
 
 import org.scalatest.flatspec.AnyFlatSpec
 

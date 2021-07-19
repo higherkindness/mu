@@ -20,7 +20,7 @@ import integrationtest._
 import weather._
 import higherkindness.mu.rpc.server.{AddService, GrpcServer}
 
-import cats.effect.{ContextShift, IO}
+import cats.effect.IO
 
 import org.scalatest.flatspec.AnyFlatSpec
 

@@ -18,19 +18,20 @@ package higherkindness.mu.rpc.internal
 
 import java.util.concurrent.{Executor => JavaExecutor}
 
-import cats.effect.{ContextShift, Effect}
+import cats.effect.Effect
 import cats.syntax.apply._
 import com.google.common.util.concurrent.{FutureCallback, Futures, ListenableFuture}
 import io.grpc.Metadata
 import io.grpc.Metadata.{ASCII_STRING_MARSHALLER, Key}
 import natchez.Kernel
+import cats.effect.Spawn
 
 package object client {
 
   private[internal] def listenableFuture2Async[F[_], A](
       fa: => ListenableFuture[A]
-  )(implicit E: Effect[F], CS: ContextShift[F]): F[A] =
-    E.async { cb =>
+  )(implicit E: Effect[F]): F[A] =
+    E.async_ { cb =>
       Futures.addCallback(
         fa,
         new FutureCallback[A] {
@@ -40,7 +41,7 @@ package object client {
         },
         new JavaExecutor {
           override def execute(command: Runnable): Unit =
-            E.toIO(CS.shift *> E.delay(command.run())).unsafeRunSync()
+            E.toIO(Spawn[F].cede *> E.delay(command.run())).unsafeRunSync()
         }
       )
     }

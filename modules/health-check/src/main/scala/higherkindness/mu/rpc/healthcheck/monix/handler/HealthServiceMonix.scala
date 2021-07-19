@@ -17,13 +17,13 @@
 package higherkindness.mu.rpc.healthcheck.monix.handler
 
 import cats.effect.Sync
-import cats.effect.concurrent.Ref
 import cats.implicits._
 import higherkindness.mu.rpc.healthcheck.monix.serviceMonix.HealthCheckServiceMonix
 import higherkindness.mu.rpc.healthcheck.unary.handler._
 import higherkindness.mu.rpc.healthcheck.ordering._
 import monix.execution.Scheduler
 import monix.reactive.{MulticastStrategy, Observable, Observer, Pipe}
+import cats.effect.Ref
 
 object HealthServiceMonix {
 
